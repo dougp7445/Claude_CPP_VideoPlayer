@@ -12,7 +12,7 @@ Before building, make sure the following are installed on your Windows machine:
 - **CMake 3.20+** — [cmake.org/download](https://cmake.org/download/) (add to PATH during install)
 - **Git LFS** — [git-lfs.github.com](https://git-lfs.github.com/) (required to pull the bundled `.dll`, `.lib`, and `.mp4` files)
 
-The FFmpeg and SDL3 libraries are bundled in the `libraries/` directory and tracked via Git LFS, so no separate installation is needed.
+The FFmpeg and SDL3 libraries are bundled in the `libraries/<OS_TARGET>/` directories and tracked via Git LFS, so no separate installation is needed.
 
 ---
 
@@ -96,7 +96,7 @@ Playback is synchronized to the audio clock with latency compensation. The main 
 
 ## Dependencies
 
-All libraries are bundled in `libraries/` and tracked via Git LFS.
+All libraries are bundled in `libraries/Windows/` and tracked via Git LFS.
 
 | Library | Version | Purpose |
 |---|---|---|
