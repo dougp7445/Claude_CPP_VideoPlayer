@@ -2,7 +2,7 @@
 
 ---
 
-## Branch: 04-22-2025-Readme
+## Branch: 04-22-2025-Readme (Note bad branch name should be 2026)
 
 ### Prompt 1
 > Update the README.md to tell a new developer how to build and run this project on Windows
@@ -19,7 +19,7 @@
 
 #### Minor editing as it included a previous prompt and did not include the prompt to actually update the Prompts.md file.
 
-## Branch: 04-22-25-LibraryUpdates
+## Branch: 04-22-25-LibraryUpdates (Note bad branch name should be 2026)
 
 ### Prompt 1
 > Move the FFMpeg libraries and SDL Libraries into a directory under libraries labeled Windows and update cmake file for library links
