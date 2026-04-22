@@ -30,3 +30,25 @@
 > Check and update the README and Prompts files based on changes.  Include this prompt.
 
 #### Minor edits to Readme to reflect OS agnostic edits.  Minor edits to Prompts file to include branch changes.
+
+## Branch: 04-22-2026-UseSVGIcons
+
+### Prompt 1
+> Update the Mute / Speaker icon with the volume svgs located in the resources/icons directory
+
+#### No edits
+
+### Prompt 2
+> Update the build to use nanosvg.h and nanosvgrast.h in the libraries directory
+
+#### No edits
+
+### Prompt 3
+> (Build error) C2440: cannot convert from 'const char *' to 'char *'
+
+#### Pasted error from previous prompt that led to this prompt.  Resolved the issue.
+
+### Prompt 4
+> Check and update the README and Prompts files based on changes to current branch.  Include this prompt.
+
+#### Minor edits to Readme to make it easier to find github for svg. Minor edits to Prompts file to include branch changes.

@@ -102,3 +102,4 @@ All libraries are bundled in `libraries/Windows/` and tracked via Git LFS.
 |---|---|---|
 | FFmpeg | 7.x (avcodec 61) | Video/audio decoding |
 | SDL3 | 3.x | Window, rendering, audio output |
+| [memononen/nanosvg](https://github.com/memononen/nanosvg) | header-only | SVG rasterization for UI icons |
