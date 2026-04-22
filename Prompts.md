@@ -52,3 +52,15 @@
 > Check and update the README and Prompts files based on changes to current branch.  Include this prompt.
 
 #### Minor edits to Readme to make it easier to find github for svg. Minor edits to Prompts file to include branch changes.
+
+## Branch: 4-11-2026-DecoderComments
+
+### Prompt 1
+> Add comments to Decoder.cpp
+
+#### Minor formatting edits.
+
+### Prompt 2
+> Update Prompts file based on changes to current branch 4-11-2026-DecoderComments.  Include this prompt.
+
+#### No edits
