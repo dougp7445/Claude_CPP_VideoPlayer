@@ -7,8 +7,12 @@
 ### Prompt 1
 > Update the README.md to tell a new developer how to build and run this project on Windows
 
+#### Minor editing for file path and some other nits I ran into.
+
 ### Prompt 2
 > Put the Building and Running sections under a For Windows section in the README.md
+
+#### No edits
 
 ### Prompt 3
 > Update Prompts.md with Claude prompts used for the 04-22-2025-Readme branch
