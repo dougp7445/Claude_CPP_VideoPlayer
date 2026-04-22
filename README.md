@@ -28,7 +28,9 @@ If you cloned before installing Git LFS, run `git lfs pull` to fetch the binary 
 
 ---
 
-## Building
+## For Windows
+
+### Building
 
 Run the build script from the repo root in Git Bash (or any bash-compatible shell):
 
@@ -47,9 +49,7 @@ cmake --build build --config Release
 
 The output executable will be at `build/Release/VideoPlayer.exe`.
 
----
-
-## Running
+### Running
 
 To play the included test video:
 
