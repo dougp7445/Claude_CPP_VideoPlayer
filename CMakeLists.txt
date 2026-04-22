@@ -4,8 +4,9 @@ project(VideoPlayer VERSION 1.0.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(FFMPEG_DIR "${CMAKE_SOURCE_DIR}/libraries/Windows/FFmpeg")
-set(SDL_DIR    "${CMAKE_SOURCE_DIR}/libraries/Windows/SDL")
+set(FFMPEG_DIR   "${CMAKE_SOURCE_DIR}/libraries/Windows/FFmpeg")
+set(SDL_DIR      "${CMAKE_SOURCE_DIR}/libraries/Windows/SDL")
+set(NANOSVG_DIR  "${CMAKE_SOURCE_DIR}/libraries/Windows/nanosvg")
 
 add_executable(VideoPlayer
     src/main.cpp
@@ -19,6 +20,7 @@ target_include_directories(VideoPlayer PRIVATE
     include
     "${FFMPEG_DIR}/include"
     "${SDL_DIR}/include"
+    "${NANOSVG_DIR}"
 )
 
 target_link_libraries(VideoPlayer PRIVATE
@@ -44,4 +46,10 @@ add_custom_command(TARGET VideoPlayer POST_BUILD
         ${FFMPEG_DLLS}
         "${SDL_DIR}/lib/x64/SDL3.dll"
         $<TARGET_FILE_DIR:VideoPlayer>
+)
+
+add_custom_command(TARGET VideoPlayer POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/resources/icons"
+        "$<TARGET_FILE_DIR:VideoPlayer>/icons"
 )

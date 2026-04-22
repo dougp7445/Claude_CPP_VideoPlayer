@@ -2,6 +2,12 @@
 #include <algorithm>
 #include <cstdio>
 #include <string>
+#include <vector>
+
+#define NANOSVG_IMPLEMENTATION
+#include "nanosvg.h"
+#define NANOSVGRAST_IMPLEMENTATION
+#include "nanosvgrast.h"
 
 // ── Layout constants (all in reference pixels at 720p) ───────────────────────
 static constexpr float BAR_H       = 58.0f;
@@ -30,6 +36,51 @@ static std::string formatTime(double secs) {
     return buf;
 }
 
+// ── SVG texture loading ───────────────────────────────────────────────────────
+
+static SDL_Texture* loadSVGTexture(SDL_Renderer* renderer, const char* path, int size) {
+    NSVGimage* image = nsvgParseFromFile(path, "px", 96.0f);
+    if (!image) return nullptr;
+
+    NSVGrasterizer* rast = nsvgCreateRasterizer();
+    if (!rast) { nsvgDelete(image); return nullptr; }
+
+    std::vector<uint8_t> pixels(size * size * 4, 0);
+    float scale = static_cast<float>(size) / std::max(image->width, image->height);
+    nsvgRasterize(rast, image, 0.0f, 0.0f, scale, pixels.data(), size, size, size * 4);
+    nsvgDeleteRasterizer(rast);
+    nsvgDelete(image);
+
+    // SVGs use fill="#000000"; recolor non-transparent pixels to white so they
+    // composite correctly over the dark control bar.
+    for (size_t i = 0; i < pixels.size(); i += 4) {
+        if (pixels[i + 3] > 0)
+            pixels[i] = pixels[i + 1] = pixels[i + 2] = 255;
+    }
+
+    SDL_Surface* surf = SDL_CreateSurfaceFrom(size, size, SDL_PIXELFORMAT_RGBA32,
+                                              pixels.data(), size * 4);
+    if (!surf) return nullptr;
+
+    SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
+    SDL_DestroySurface(surf);
+    if (tex) SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+    return tex;
+}
+
+void PlayerUI::initTextures(SDL_Renderer* renderer) {
+    const char* base = SDL_GetBasePath();
+    std::string dir = base ? std::string(base) : "";
+
+    m_volFullTex  = loadSVGTexture(renderer, (dir + "icons/volume-full.svg").c_str(),  64);
+    m_volMutedTex = loadSVGTexture(renderer, (dir + "icons/volume-muted.svg").c_str(), 64);
+}
+
+PlayerUI::~PlayerUI() {
+    SDL_DestroyTexture(m_volFullTex);
+    SDL_DestroyTexture(m_volMutedTex);
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 void PlayerUI::onActivity() {
@@ -55,6 +106,8 @@ void PlayerUI::render(SDL_Renderer* renderer,
                       double currentPts, double duration, bool paused) {
     // Lazy-init the activity timer so the bar is visible at startup.
     if (m_lastActivityMs == 0) m_lastActivityMs = SDL_GetTicks();
+
+    if (!m_texturesLoaded) { initTextures(renderer); m_texturesLoaded = true; }
 
     if (paused) {
         // Video redraw while paused is handled by Renderer::renderUI (needs the texture).
@@ -176,29 +229,14 @@ void PlayerUI::render(SDL_Renderer* renderer,
     float volBarY   = barY + (barH - progH) * 0.5f;
 
     m_muteRect = {volLabelX, barY, muteBtnW, barH};
-    const float icx = volLabelX + muteBtnW * 0.5f;
-    const float icy = barY + barH * 0.5f;
 
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-
-    SDL_FRect speakerBody = {icx - 11.0f*sc, icy - 4.0f*sc, 5.0f*sc, 8.0f*sc};
-    SDL_RenderFillRect(renderer, &speakerBody);
-
-    SDL_Vertex cone[3] = {
-        {{icx - 6.0f*sc, icy - 7.0f*sc}, {255,255,255,255}, {0,0}},
-        {{icx + 2.0f*sc, icy},             {255,255,255,255}, {0,0}},
-        {{icx - 6.0f*sc, icy + 7.0f*sc}, {255,255,255,255}, {0,0}},
-    };
-    SDL_RenderGeometry(renderer, nullptr, cone, 3, nullptr, 0);
-
-    if (m_muted) {
-        SDL_RenderLine(renderer, icx+4.0f*sc, icy-6.0f*sc, icx+11.0f*sc, icy+6.0f*sc);
-        SDL_RenderLine(renderer, icx+4.0f*sc, icy+6.0f*sc, icx+11.0f*sc, icy-6.0f*sc);
-    } else {
-        SDL_RenderLine(renderer, icx+4.0f*sc,  icy-4.0f*sc, icx+7.0f*sc,  icy);
-        SDL_RenderLine(renderer, icx+7.0f*sc,  icy,          icx+4.0f*sc,  icy+4.0f*sc);
-        SDL_RenderLine(renderer, icx+7.0f*sc,  icy-7.0f*sc, icx+11.0f*sc, icy);
-        SDL_RenderLine(renderer, icx+11.0f*sc, icy,          icx+7.0f*sc,  icy+7.0f*sc);
+    SDL_Texture* iconTex = m_muted ? m_volMutedTex : m_volFullTex;
+    if (iconTex) {
+        float iconSize = muteBtnW * 0.8f;
+        SDL_FRect iconDst = {volLabelX + (muteBtnW - iconSize) * 0.5f,
+                             barY      + (barH     - iconSize) * 0.5f,
+                             iconSize, iconSize};
+        SDL_RenderTexture(renderer, iconTex, nullptr, &iconDst);
     }
 
     // ── Volume bar ──

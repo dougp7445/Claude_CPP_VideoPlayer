@@ -6,6 +6,8 @@
 
 class PlayerUI {
 public:
+    ~PlayerUI();
+
     // Draw the control bar overlay onto renderer.
     void render(SDL_Renderer* renderer, double currentPts, double duration, bool paused);
 
@@ -51,4 +53,10 @@ private:
     float m_volumeBarW   = 0, m_volumeBarH   = 0;
     SDL_FRect m_muteRect  = {};
     SDL_FRect m_speedRect = {};
+
+    SDL_Texture* m_volFullTex     = nullptr;
+    SDL_Texture* m_volMutedTex    = nullptr;
+    bool         m_texturesLoaded = false;
+
+    void initTextures(SDL_Renderer* renderer);
 };
