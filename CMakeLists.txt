@@ -4,8 +4,8 @@ project(VideoPlayer VERSION 1.0.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(FFMPEG_DIR "${CMAKE_SOURCE_DIR}/libraries/FFmpeg")
-set(SDL_DIR    "${CMAKE_SOURCE_DIR}/libraries/SDL")
+set(FFMPEG_DIR "${CMAKE_SOURCE_DIR}/libraries/Windows/FFmpeg")
+set(SDL_DIR    "${CMAKE_SOURCE_DIR}/libraries/Windows/SDL")
 
 add_executable(VideoPlayer
     src/main.cpp
