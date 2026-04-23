@@ -29,3 +29,26 @@ static constexpr int RES_720P_WIDTH  = 1280; static constexpr int RES_720P_HEIGH
 static constexpr int RES_1080P_WIDTH = 1920; static constexpr int RES_1080P_HEIGHT = 1080; // FHD
 static constexpr int RES_1440P_WIDTH = 2560; static constexpr int RES_1440P_HEIGHT = 1440; // QHD
 static constexpr int RES_4K_WIDTH    = 3840; static constexpr int RES_4K_HEIGHT    = 2160; // UHD
+
+// ── Common video bitrates (bits per second) ───────────────────────────────────
+// Organized by resolution tier with low / medium / high quality levels.
+// Values match typical streaming and encoding targets (e.g. YouTube, Netflix).
+static constexpr int BITRATE_480P_LOW    = 500000; //  0.5 Mbps
+static constexpr int BITRATE_480P_MED    = 1000000; //  1.0 Mbps
+static constexpr int BITRATE_480P_HIGH   = 2000000; //  2.0 Mbps
+
+static constexpr int BITRATE_720P_LOW    = 1500000; //  1.5 Mbps
+static constexpr int BITRATE_720P_MED    = 2500000; //  2.5 Mbps
+static constexpr int BITRATE_720P_HIGH   = 4000000; //  4.0 Mbps
+
+static constexpr int BITRATE_1080P_LOW   = 3000000; //  3.0 Mbps
+static constexpr int BITRATE_1080P_MED   = 5000000; //  5.0 Mbps
+static constexpr int BITRATE_1080P_HIGH  = 8000000; //  8.0 Mbps
+
+static constexpr int BITRATE_1440P_LOW   =  6000000; //  6.0 Mbps
+static constexpr int BITRATE_1440P_MED   = 10000000; // 10.0 Mbps
+static constexpr int BITRATE_1440P_HIGH  = 16000000; // 16.0 Mbps
+
+static constexpr int BITRATE_4K_LOW      = 15000000; // 15.0 Mbps
+static constexpr int BITRATE_4K_MED      = 25000000; // 25.0 Mbps
+static constexpr int BITRATE_4K_HIGH     = 45000000; // 45.0 Mbps

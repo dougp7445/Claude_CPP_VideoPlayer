@@ -138,3 +138,13 @@
 > Update Prompts file based on changes to current branch 4-22-2026-Constants.  Include this prompt.
 
 #### No edits
+
+### Prompt 5
+> Add contants for common video bitrates
+
+#### Removed ' deliminator
+
+### Prompt 6
+> Update Prompts.md
+
+#### No edits
