@@ -53,3 +53,6 @@ add_custom_command(TARGET VideoPlayer POST_BUILD
         "${CMAKE_SOURCE_DIR}/resources/icons"
         "$<TARGET_FILE_DIR:VideoPlayer>/icons"
 )
+
+enable_testing()
+add_subdirectory(tests)
