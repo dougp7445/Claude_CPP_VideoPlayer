@@ -7,6 +7,7 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
+# Decoder Tests
 add_executable(DecoderTests DecoderTests.cpp ../src/Decoder.cpp)
 
 target_include_directories(DecoderTests PRIVATE
@@ -38,6 +39,8 @@ add_custom_command(TARGET DecoderTests POST_BUILD
 include(GoogleTest)
 gtest_discover_tests(DecoderTests)
 
+
+# Renderer Tests
 add_executable(RendererTests
     RendererTests.cpp
     ../src/Renderer.cpp

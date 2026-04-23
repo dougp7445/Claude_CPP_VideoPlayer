@@ -85,7 +85,7 @@
 ### Prompt 4
 > Add tests for Renderer.cpp
 
-#### No edits
+#### Added comments in CMakeLists.txt to show where Decoder and Renderer tests begin.
 
 ### Prompt 5
 > (Build error) C2361: initialization of 'target' is skipped by 'default' label
