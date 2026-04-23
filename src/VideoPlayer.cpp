@@ -55,7 +55,7 @@ void VideoPlayer::renderLoop() {
                 if (paused) { 
                     m_renderer.pauseAudio();
                 }
-                else      { 
+                else { 
                     m_renderer.resumeAudio(); 
                     reclock = true; 
                 }
