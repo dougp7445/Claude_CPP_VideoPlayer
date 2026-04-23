@@ -40,13 +40,14 @@ void VideoPlayer::renderLoop() {
     bool     paused     = false;
     double   currentPts = 0.0;
     float    lastSpeed  = 1.0f;
+    double   target     = 0.0;
 
     while (!m_quit) {
         PlayerEvent ev = m_renderer.pollEvents();
 
         if (ev == PlayerEvent::Quit) {
-            break
-        };
+            break;
+        }
 
         switch (ev) {
             case PlayerEvent::TogglePause:
@@ -62,7 +63,7 @@ void VideoPlayer::renderLoop() {
 
             case PlayerEvent::SeekForward:
             case PlayerEvent::SeekBackward: 
-                double target = currentPts + (ev == PlayerEvent::SeekForward ? SEEK_STEP : -SEEK_STEP);
+                target = currentPts + (ev == PlayerEvent::SeekForward ? SEEK_STEP : -SEEK_STEP);
                 target = std::max(0.0, std::min(target, duration));
                 if (m_decoder.seek(target)) {
                     m_renderer.flushAudio();
@@ -75,7 +76,7 @@ void VideoPlayer::renderLoop() {
                 }
                 break;
             case PlayerEvent::SeekTo:
-                double target = m_renderer.getSeekTarget() * duration;
+                target = m_renderer.getSeekTarget() * duration;
                 target = std::max(0.0, std::min(target, duration));
                 
                 if (m_decoder.seek(target)) {
@@ -116,8 +117,8 @@ void VideoPlayer::renderLoop() {
 
         DecodedFrame frame;
         if (!m_decoder.readFrame(frame)) {
-            break
-        };
+            break;
+        }
 
         if (frame.audioFrame) {
             AVFrame* f = frame.audioFrame;

@@ -206,18 +206,15 @@ void Renderer::toggleFullscreen() {
 }
 
 double Renderer::getAudioClock() const {
-    double clock = 0.0;
-
     if (!m_audioStream || m_bytesPerSecond == 0) {
-        clock = -1.0;
+        return -1.0;
     }
-    else
-    {
-        int64_t played = static_cast<int64_t>(m_totalBytesQueued) - SDL_GetAudioStreamQueued(m_audioStream);
-        clock = static_cast<double>(played) / m_bytesPerSecond;
-    }    
 
-    return clock;
+    // SDL's device buffer can still report queued bytes briefly after a flush,
+    // making played transiently negative. Clamp to zero so the clock never goes
+    // below the last known playback position.
+    int64_t played = static_cast<int64_t>(m_totalBytesQueued) - SDL_GetAudioStreamQueued(m_audioStream);
+    return std::max(0.0, static_cast<double>(played) / m_bytesPerSecond);
 }
 
 void Renderer::syncAudio() {

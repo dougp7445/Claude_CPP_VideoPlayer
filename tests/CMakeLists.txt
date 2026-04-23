@@ -37,3 +37,41 @@ add_custom_command(TARGET DecoderTests POST_BUILD
 
 include(GoogleTest)
 gtest_discover_tests(DecoderTests)
+
+add_executable(RendererTests
+    RendererTests.cpp
+    ../src/Renderer.cpp
+    ../src/PlayerUI.cpp
+    ../src/Decoder.cpp
+)
+
+target_include_directories(RendererTests PRIVATE
+    ../include
+    "${FFMPEG_DIR}/include"
+    "${SDL_DIR}/include"
+    "${NANOSVG_DIR}"
+)
+
+target_link_libraries(RendererTests PRIVATE
+    gtest_main
+    "${FFMPEG_DIR}/lib/avcodec.lib"
+    "${FFMPEG_DIR}/lib/avformat.lib"
+    "${FFMPEG_DIR}/lib/avutil.lib"
+    "${FFMPEG_DIR}/lib/swscale.lib"
+    "${FFMPEG_DIR}/lib/swresample.lib"
+    "${SDL_DIR}/lib/x64/SDL3.lib"
+)
+
+target_compile_definitions(RendererTests PRIVATE
+    TEST_RESOURCES_DIR="${CMAKE_SOURCE_DIR}/resources"
+)
+
+# FFmpeg and SDL DLLs must be next to the test binary for the runtime to find them.
+add_custom_command(TARGET RendererTests POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${FFMPEG_DLLS}
+        "${SDL_DIR}/lib/x64/SDL3.dll"
+        $<TARGET_FILE_DIR:RendererTests>
+)
+
+gtest_discover_tests(RendererTests)
