@@ -1,4 +1,5 @@
 #include "VideoPlayer.h"
+#include "Constants.h"
 #include <algorithm>
 #include <cstdint>
 #include <iostream>
@@ -30,7 +31,7 @@ void VideoPlayer::renderLoop() {
     }
 
     const double audioLatency = m_renderer.getAudioLatency();
-    const double SEEK_STEP    = 10.0;
+    const double SEEK_STEP    = SEEK_STEP_SECONDS;
     const double duration     = m_decoder.duration();
 
     bool     clocked    = false;
@@ -89,11 +90,11 @@ void VideoPlayer::renderLoop() {
                     }
                 }
                 break;
-            case PlayerEvent::VolumeUp:        
-                m_renderer.adjustVolume( 0.1f); 
+            case PlayerEvent::VolumeUp:
+                m_renderer.adjustVolume( VOLUME_KEY_DELTA);
                 break;
             case PlayerEvent::VolumeDown:
-                m_renderer.adjustVolume(-0.1f); 
+                m_renderer.adjustVolume(-VOLUME_KEY_DELTA);
                 break;
             case PlayerEvent::ToggleFullscreen: 
                 m_renderer.toggleFullscreen();  

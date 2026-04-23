@@ -116,3 +116,25 @@
 > Update Prompts file based on changes to current branch 4-22-2026-AddTests.  Include this prompt.
 
 #### Multiple edits to describe user edits.  Left Prompt 7 alone because description was accurate to problem.
+
+## Branch: 4-22-2026-Constants
+
+### Prompt 1
+> Add a constants file to main project and another constants file for the test project
+
+#### No edits
+
+### Prompt 2
+> Add constants for video dimensions
+
+#### No edits
+
+### Prompt 3
+> Add other standard video resolutions to constants
+
+#### No edits
+
+### Prompt 4
+> Update Prompts file based on changes to current branch 4-22-2026-Constants.  Include this prompt.
+
+#### No edits

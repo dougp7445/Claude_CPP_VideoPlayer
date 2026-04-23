@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 #include "Decoder.h"
-
-static const std::string TEST_VIDEO = std::string(TEST_RESOURCES_DIR) + "/test.mp4";
+#include "TestConstants.h"
 
 // ── Default state (no file opened) ───────────────────────────────────────────
 
@@ -25,19 +24,19 @@ TEST(DecoderTest, OpenInvalidFileReturnsFalse) {
 
 TEST(DecoderTest, OpenValidFileReturnsTrue) {
     Decoder d;
-    EXPECT_TRUE(d.open(TEST_VIDEO));
+    EXPECT_TRUE(d.open(TEST_VIDEO_PATH));
 }
 
 TEST(DecoderTest, OpenValidFilePopulatesDimensions) {
     Decoder d;
-    ASSERT_TRUE(d.open(TEST_VIDEO));
+    ASSERT_TRUE(d.open(TEST_VIDEO_PATH));
     EXPECT_GT(d.videoWidth(),  0);
     EXPECT_GT(d.videoHeight(), 0);
 }
 
 TEST(DecoderTest, OpenValidFilePopulatesDuration) {
     Decoder d;
-    ASSERT_TRUE(d.open(TEST_VIDEO));
+    ASSERT_TRUE(d.open(TEST_VIDEO_PATH));
     EXPECT_GT(d.duration(), 0.0);
 }
 
@@ -45,7 +44,7 @@ TEST(DecoderTest, OpenValidFilePopulatesDuration) {
 
 TEST(DecoderTest, ReadFrameReturnsTrue) {
     Decoder d;
-    ASSERT_TRUE(d.open(TEST_VIDEO));
+    ASSERT_TRUE(d.open(TEST_VIDEO_PATH));
     DecodedFrame frame;
     EXPECT_TRUE(d.readFrame(frame));
     av_frame_free(&frame.videoFrame);
@@ -54,7 +53,7 @@ TEST(DecoderTest, ReadFrameReturnsTrue) {
 
 TEST(DecoderTest, ReadFrameProducesVideoFrame) {
     Decoder d;
-    ASSERT_TRUE(d.open(TEST_VIDEO));
+    ASSERT_TRUE(d.open(TEST_VIDEO_PATH));
     // Read until we get a video frame (first few packets may be audio).
     DecodedFrame frame;
     bool gotVideo = false;
@@ -69,7 +68,7 @@ TEST(DecoderTest, ReadFrameProducesVideoFrame) {
 
 TEST(DecoderTest, ReadFramePtsIsNonNegative) {
     Decoder d;
-    ASSERT_TRUE(d.open(TEST_VIDEO));
+    ASSERT_TRUE(d.open(TEST_VIDEO_PATH));
     DecodedFrame frame;
     ASSERT_TRUE(d.readFrame(frame));
     EXPECT_GE(frame.pts, 0.0);
@@ -79,7 +78,7 @@ TEST(DecoderTest, ReadFramePtsIsNonNegative) {
 
 TEST(DecoderTest, ConsecutiveFramesPtsIncrease) {
     Decoder d;
-    ASSERT_TRUE(d.open(TEST_VIDEO));
+    ASSERT_TRUE(d.open(TEST_VIDEO_PATH));
 
     // Collect a few PTS values and verify they are non-decreasing.
     double prevPts = -1.0;
@@ -97,19 +96,19 @@ TEST(DecoderTest, ConsecutiveFramesPtsIncrease) {
 
 TEST(DecoderTest, SeekToBeginningSucceeds) {
     Decoder d;
-    ASSERT_TRUE(d.open(TEST_VIDEO));
+    ASSERT_TRUE(d.open(TEST_VIDEO_PATH));
     EXPECT_TRUE(d.seek(0.0));
 }
 
 TEST(DecoderTest, SeekToMiddleSucceeds) {
     Decoder d;
-    ASSERT_TRUE(d.open(TEST_VIDEO));
+    ASSERT_TRUE(d.open(TEST_VIDEO_PATH));
     EXPECT_TRUE(d.seek(d.duration() / 2.0));
 }
 
 TEST(DecoderTest, SeekProducesFramesNearTarget) {
     Decoder d;
-    ASSERT_TRUE(d.open(TEST_VIDEO));
+    ASSERT_TRUE(d.open(TEST_VIDEO_PATH));
 
     double target = d.duration() / 2.0;
     ASSERT_TRUE(d.seek(target));
@@ -118,14 +117,14 @@ TEST(DecoderTest, SeekProducesFramesNearTarget) {
     // target (AVSEEK_FLAG_BACKWARD may land on the prior keyframe).
     DecodedFrame frame;
     ASSERT_TRUE(d.readFrame(frame));
-    EXPECT_NEAR(frame.pts, target, 5.0);
+    EXPECT_NEAR(frame.pts, target, TEST_SEEK_TOLERANCE_S);
     av_frame_free(&frame.videoFrame);
     av_frame_free(&frame.audioFrame);
 }
 
 TEST(DecoderTest, SeekAndReadContinuesAfterSeek) {
     Decoder d;
-    ASSERT_TRUE(d.open(TEST_VIDEO));
+    ASSERT_TRUE(d.open(TEST_VIDEO_PATH));
     ASSERT_TRUE(d.seek(d.duration() / 4.0));
 
     DecodedFrame frame;
