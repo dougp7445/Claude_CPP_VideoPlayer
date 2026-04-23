@@ -1,4 +1,5 @@
 #include "PlayerUI.h"
+#include "Constants.h"
 #include <algorithm>
 #include <cstdio>
 #include <string>
@@ -92,7 +93,7 @@ void PlayerUI::onActivity() {
 }
 
 void PlayerUI::adjustVolume(float delta) {
-    m_volume = SDL_clamp(m_volume + delta, 0.0f, 2.0f);
+    m_volume = SDL_clamp(m_volume + delta, VOLUME_MIN, VOLUME_MAX);
 }
 
 void PlayerUI::cycleSpeed() {
@@ -132,7 +133,7 @@ void PlayerUI::render(SDL_Renderer* renderer,
     const float H = static_cast<float>(outH);
 
     // Scale relative to a 720p reference height.
-    const float sc = SDL_clamp(H / 720.0f, 0.5f, 3.0f);
+    const float sc = SDL_clamp(H / UI_REFERENCE_HEIGHT, 0.5f, 3.0f);
 
     const float barH      = BAR_H       * sc;
     const float pad       = PAD         * sc;
@@ -244,7 +245,7 @@ void PlayerUI::render(SDL_Renderer* renderer,
     SDL_FRect volBg = {volBarX, volBarY, volBarW, progH};
     SDL_RenderFillRect(renderer, &volBg);
 
-    float volFillW = SDL_clamp(m_volume / 2.0f, 0.0f, 1.0f) * volBarW;
+    float volFillW = SDL_clamp(m_volume / VOLUME_MAX, VOLUME_MIN, 1.0f) * volBarW;
     SDL_SetRenderDrawColor(renderer, 220, 220, 220, 255);
     SDL_FRect volFill = {volBarX, volBarY, volFillW, progH};
     SDL_RenderFillRect(renderer, &volFill);

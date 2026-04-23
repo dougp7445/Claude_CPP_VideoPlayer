@@ -116,3 +116,56 @@
 > Update Prompts file based on changes to current branch 4-22-2026-AddTests.  Include this prompt.
 
 #### Multiple edits to describe user edits.  Left Prompt 7 alone because description was accurate to problem.
+
+## Branch: 4-22-2026-Constants
+
+### Prompt 1
+> Add a constants file to main project and another constants file for the test project
+
+#### No edits
+
+### Prompt 2
+> Add constants for video dimensions
+
+#### No edits
+
+### Prompt 3
+> Add other standard video resolutions to constants
+
+#### No edits
+
+### Prompt 4
+> Update Prompts file based on changes to current branch 4-22-2026-Constants.  Include this prompt.
+
+#### No edits
+
+### Prompt 5
+> Add contants for common video bitrates
+
+#### Removed ' deliminator
+
+### Prompt 6
+> Update Prompts.md
+
+#### No edits
+
+### Prompt 7
+> Add common audio sample rates and bytes per sample to constants
+
+#### No edits
+
+### Prompt 8
+
+> Consolidate contants to remove duplicates
+
+#### Rejected change as Claude wanted to keep both duplicate values instead of replacing one with the other
+
+### Prompt 9
+> Add common audio channels to constants
+
+#### User rejected keeping AUDIO_CHANNELS and redirected to replace it with CHANNELS_STEREO everywhere instead.
+
+### Prompt 10
+> Update Prompts.md
+
+#### Multiple prompts missed (7 and 8) and added in.

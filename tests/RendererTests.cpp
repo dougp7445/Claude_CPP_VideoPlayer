@@ -2,8 +2,7 @@
 #include <vector>
 #include "Renderer.h"
 #include "Decoder.h"
-
-static const std::string TEST_VIDEO = std::string(TEST_RESOURCES_DIR) + "/test.mp4";
+#include "TestConstants.h"
 
 // ── Default state (no SDL init required) ─────────────────────────────────────
 // These tests construct a Renderer without calling initWindow/initRenderer and
@@ -50,7 +49,7 @@ protected:
     bool     m_hasAudio = false;
 
     void SetUp() override {
-        ASSERT_TRUE(r.initWindow("RendererNoVideoTest", 1280, 720));
+        ASSERT_TRUE(r.initWindow("RendererNoVideoTest", TEST_WINDOW_WIDTH, TEST_WINDOW_HEIGHT));
         ASSERT_TRUE(r.initRenderer());
         m_hasAudio = (r.getAudioClock() != -1.0);
     }
@@ -146,10 +145,9 @@ TEST_F(RendererNoVideoTest, PollEventsReturnsNoneWhenIdle) {
 
 TEST_F(RendererNoVideoTest, QueueAudioAdvancesAudioClock) {
     SkipIfNoAudio();
-    int bytesPerSecond = 44100 * 2 * 2;
-    std::vector<uint8_t> silence(bytesPerSecond, 0);
-    r.queueAudio(silence.data(), bytesPerSecond);
-    SDL_Delay(100);
+    std::vector<uint8_t> silence(TEST_AUDIO_BYTES_PER_SECOND, 0);
+    r.queueAudio(silence.data(), TEST_AUDIO_BYTES_PER_SECOND);
+    SDL_Delay(TEST_AUDIO_QUEUE_DELAY_MS);
     EXPECT_GE(r.getAudioClock(), 0.0);
 }
 
@@ -168,7 +166,7 @@ protected:
     bool     m_hasAudio = false;
 
     void SetUp() override {
-        ASSERT_TRUE(d.open(TEST_VIDEO));
+        ASSERT_TRUE(d.open(TEST_VIDEO_PATH));
         ASSERT_TRUE(r.initWindow("RendererTest", d.videoWidth(), d.videoHeight()));
         ASSERT_TRUE(r.initRenderer());
         m_hasAudio = (r.getAudioClock() != -1.0);
@@ -186,7 +184,7 @@ protected:
     // Decode and return the next video frame, skipping audio-only frames.
     // Caller owns the returned AVFrame and must av_frame_free it.
     AVFrame* nextVideoFrame() {
-        for (int i = 0; i < 64; ++i) {
+        for (int i = 0; i < TEST_FRAME_SEARCH_LIMIT; ++i) {
             DecodedFrame frame;
             if (!d.readFrame(frame)) break;
             av_frame_free(&frame.audioFrame);
@@ -295,7 +293,7 @@ TEST_F(RendererSDLTest, QueueAudioAdvancesAudioClock) {
             break;
         }
     }
-    SDL_Delay(100);
+    SDL_Delay(TEST_AUDIO_QUEUE_DELAY_MS);
     EXPECT_GE(r.getAudioClock(), 0.0);
 }
 

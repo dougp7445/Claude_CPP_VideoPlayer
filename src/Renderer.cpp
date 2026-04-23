@@ -1,4 +1,5 @@
 #include "Renderer.h"
+#include "Constants.h"
 #include <algorithm>
 #include <cstdio>
 #include <iostream>
@@ -26,8 +27,8 @@ bool Renderer::initWindow(const std::string& title, int width, int height) {
     SDL_DisplayID disp = SDL_GetPrimaryDisplay();
     const SDL_DisplayMode* mode = SDL_GetCurrentDisplayMode(disp);
     if (mode) {
-        int maxW = static_cast<int>(mode->w * 0.85f);
-        int maxH = static_cast<int>(mode->h * 0.85f);
+        int maxW = static_cast<int>(mode->w * WINDOW_MAX_DISPLAY_FRACTION);
+        int maxH = static_cast<int>(mode->h * WINDOW_MAX_DISPLAY_FRACTION);
         if (winW > maxW || winH > maxH) {
             float sc = std::min(static_cast<float>(maxW) / winW,
                                 static_cast<float>(maxH) / winH);
@@ -62,9 +63,9 @@ bool Renderer::initRenderer() {
 
     SDL_AudioSpec spec{};
     spec.format   = SDL_AUDIO_S16;
-    spec.channels = 2;
-    spec.freq     = 44100;
-    m_bytesPerSecond = spec.freq * spec.channels * 2;
+    spec.channels = CHANNELS_STEREO;
+    spec.freq     = SAMPLE_RATE_44K;
+    m_bytesPerSecond = SAMPLE_RATE_44K * CHANNELS_STEREO * BYTES_PER_SAMPLE_16BIT;
 
     m_audioStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
                                               &spec, nullptr, nullptr);
@@ -254,13 +255,13 @@ PlayerEvent Renderer::pollEvents() {
                 case SDLK_LEFT:   
                     playerEvent = PlayerEvent::SeekBackward;
                     break;
-                case SDLK_UP:     
-                    m_ui.adjustVolume( 0.1f); 
-                    syncAudio(); 
+                case SDLK_UP:
+                    m_ui.adjustVolume( VOLUME_KEY_DELTA);
+                    syncAudio();
                     break;
-                case SDLK_DOWN:   
-                    m_ui.adjustVolume(-0.1f); 
-                    syncAudio(); 
+                case SDLK_DOWN:
+                    m_ui.adjustVolume(-VOLUME_KEY_DELTA);
+                    syncAudio();
                     break;
                 case SDLK_F:      
                     playerEvent = PlayerEvent::ToggleFullscreen;
@@ -289,7 +290,7 @@ PlayerEvent Renderer::pollEvents() {
 
         case SDL_EVENT_MOUSE_WHEEL:
             m_ui.onActivity();
-            m_ui.adjustVolume(event.wheel.y * 0.05f);
+            m_ui.adjustVolume(event.wheel.y * VOLUME_WHEEL_DELTA);
             syncAudio();
             break;
 
