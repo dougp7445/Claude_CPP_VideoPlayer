@@ -2,9 +2,29 @@
 
 // ── Audio pipeline ────────────────────────────────────────────────────────────
 // Shared between Decoder (resampling target) and Renderer (output spec).
-static constexpr int   AUDIO_SAMPLE_RATE      = 44100;
-static constexpr int   AUDIO_CHANNELS         = 2;
-static constexpr int   AUDIO_BYTES_PER_SAMPLE = 2;  // 16-bit PCM (int16_t)
+
+// Common sample rates (Hz)
+static constexpr int   SAMPLE_RATE_8K         =   8000; // Telephone
+static constexpr int   SAMPLE_RATE_11K        =  11025; // Quarter CD
+static constexpr int   SAMPLE_RATE_22K        =  22050; // Half CD
+static constexpr int   SAMPLE_RATE_44K        =  44100; // CD
+static constexpr int   SAMPLE_RATE_48K        =  48000; // DVD / professional
+static constexpr int   SAMPLE_RATE_88K        =  88200; // Double CD
+static constexpr int   SAMPLE_RATE_96K        =  96000; // High resolution
+static constexpr int   SAMPLE_RATE_192K       = 192000; // Very high resolution
+
+// Common bytes per sample (bit depth)
+static constexpr int   BYTES_PER_SAMPLE_8BIT  = 1; //  8-bit
+static constexpr int   BYTES_PER_SAMPLE_16BIT = 2; // 16-bit
+static constexpr int   BYTES_PER_SAMPLE_24BIT = 3; // 24-bit
+static constexpr int   BYTES_PER_SAMPLE_32BIT = 4; // 32-bit
+
+// Common audio channel counts
+static constexpr int   CHANNELS_MONO          = 1; // Mono
+static constexpr int   CHANNELS_STEREO        = 2; // Stereo
+static constexpr int   CHANNELS_QUAD          = 4; // Quadraphonic
+static constexpr int   CHANNELS_5_1           = 6; // 5.1 Surround
+static constexpr int   CHANNELS_7_1           = 8; // 7.1 Surround
 
 // ── Volume ────────────────────────────────────────────────────────────────────
 static constexpr float VOLUME_MIN             = 0.0f;

@@ -63,9 +63,9 @@ bool Renderer::initRenderer() {
 
     SDL_AudioSpec spec{};
     spec.format   = SDL_AUDIO_S16;
-    spec.channels = AUDIO_CHANNELS;
-    spec.freq     = AUDIO_SAMPLE_RATE;
-    m_bytesPerSecond = AUDIO_SAMPLE_RATE * AUDIO_CHANNELS * AUDIO_BYTES_PER_SAMPLE;
+    spec.channels = CHANNELS_STEREO;
+    spec.freq     = SAMPLE_RATE_44K;
+    m_bytesPerSecond = SAMPLE_RATE_44K * CHANNELS_STEREO * BYTES_PER_SAMPLE_16BIT;
 
     m_audioStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
                                               &spec, nullptr, nullptr);

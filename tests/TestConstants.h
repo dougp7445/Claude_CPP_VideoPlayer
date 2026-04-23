@@ -8,7 +8,7 @@ static const std::string TEST_VIDEO_PATH = std::string(TEST_RESOURCES_DIR) + "/t
 
 // ── Audio ─────────────────────────────────────────────────────────────────────
 static constexpr int TEST_AUDIO_BYTES_PER_SECOND =
-    AUDIO_SAMPLE_RATE * AUDIO_CHANNELS * AUDIO_BYTES_PER_SAMPLE;
+    SAMPLE_RATE_44K * CHANNELS_STEREO * BYTES_PER_SAMPLE_16BIT;
 
 // Delay after queuing audio before checking the clock — gives the device time
 // to start consuming bytes.

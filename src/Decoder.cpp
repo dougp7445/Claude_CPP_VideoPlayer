@@ -80,7 +80,7 @@ bool Decoder::initAudioCodec() {
     swr_alloc_set_opts2(&m_swrCtx,
         &stereo,                        // out layout
         AV_SAMPLE_FMT_S16,              // out format
-        AUDIO_SAMPLE_RATE,              // out sample rate
+        SAMPLE_RATE_44K,              // out sample rate
         &m_codecCtxAudio->ch_layout,    // in layout
         m_codecCtxAudio->sample_fmt,    // in format
         m_codecCtxAudio->sample_rate,   // in sample rate
@@ -158,11 +158,11 @@ bool Decoder::readFrame(DecodedFrame& out) {
                 // output space and don't drop audio at the tail of each chunk.
                 int outSamples = av_rescale_rnd(
                     swr_get_delay(m_swrCtx, m_codecCtxAudio->sample_rate) + m_frame->nb_samples,
-                    AUDIO_SAMPLE_RATE, m_codecCtxAudio->sample_rate, AV_ROUND_UP);
+                    SAMPLE_RATE_44K, m_codecCtxAudio->sample_rate, AV_ROUND_UP);
 
                 AVFrame* resampled = av_frame_alloc();
                 resampled->format      = AV_SAMPLE_FMT_S16;
-                resampled->sample_rate = AUDIO_SAMPLE_RATE;
+                resampled->sample_rate = SAMPLE_RATE_44K;
                 resampled->nb_samples  = outSamples;
                 AVChannelLayout stereo = AV_CHANNEL_LAYOUT_STEREO;
                 av_channel_layout_copy(&resampled->ch_layout, &stereo);
