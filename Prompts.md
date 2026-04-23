@@ -53,7 +53,7 @@
 
 #### Minor edits to Readme to make it easier to find github for svg. Minor edits to Prompts file to include branch changes.
 
-## Branch: 4-11-2026-DecoderComments
+## Branch: 4-11-2026-DecoderComments (Pay attention to branch names)
 
 ### Prompt 1
 > Add comments to Decoder.cpp
@@ -64,3 +64,55 @@
 > Update Prompts file based on changes to current branch 4-11-2026-DecoderComments.  Include this prompt.
 
 #### No edits
+
+## Branch: 4-22-2026-AddTests
+
+### Prompt 1
+> Add new Cmake project in a directory called tests to run GoogleTests for Decoder.cpp
+
+#### No edits
+
+### Prompt 2
+> Add script called runTests.sh that will run unit tests
+
+#### No edits
+
+### Prompt 3
+> Update README.md with information on how to run tests
+
+#### No edits
+
+### Prompt 4
+> Add tests for Renderer.cpp
+
+#### No edits
+
+### Prompt 5
+> (Build error) C2361: initialization of 'target' is skipped by 'default' label
+
+#### Changed target to be initialized outside of switch
+
+### Prompt 6
+> The following tests FAILED: 22 - RendererSDLTest.AudioClockAfterInitIsNonNegative (Failed)
+
+#### getAudioClock() changed back to original prompt
+
+### Prompt 7
+> The following tests FAILED: 22 - RendererSDLTest.AudioClockAfterInitIsNonNegative (Failed) is still failing
+
+#### Root cause was m_audioStream being null when no audio device available. Fixed by adding SkipIfNoAudio() guard to audio-dependent tests.
+
+### Prompt 8
+> Update the RendererSDLTest to use the test.mp4 file
+
+#### No edits
+
+### Prompt 9
+> Add tests for renderer without opening TEST_VIDEO
+
+#### No edits
+
+### Prompt 10
+> Update Prompts file based on changes to current branch 4-22-2026-AddTests.  Include this prompt.
+
+#### Multiple edits to describe user edits.  Left Prompt 7 alone because description was accurate to problem.
