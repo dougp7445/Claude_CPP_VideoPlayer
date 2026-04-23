@@ -63,6 +63,16 @@ To play any other video file:
 ./build/Release/VideoPlayer.exe path/to/your/video.mp4
 ```
 
+### Testing
+
+Build first, then run the unit tests with:
+
+```bash
+bash runTests.sh
+```
+
+This runs all GoogleTests via CTest and prints output only for failing tests. GoogleTest is downloaded automatically at CMake configure time — no manual setup needed.
+
 ---
 
 ## Controls

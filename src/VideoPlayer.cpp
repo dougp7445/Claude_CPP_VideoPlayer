@@ -12,7 +12,9 @@ VideoPlayer::VideoPlayer() = default;
 VideoPlayer::~VideoPlayer() = default;
 
 bool VideoPlayer::load(const std::string& filePath) {
-    if (!m_decoder.open(filePath)) return false;
+    if (!m_decoder.open(filePath)) {
+        return false;
+    } 
     // initWindow must run on the main thread (OS window creation).
     return m_renderer.initWindow("VideoPlayer - " + filePath,
                                  m_decoder.videoWidth(),
@@ -21,7 +23,11 @@ bool VideoPlayer::load(const std::string& filePath) {
 
 // Runs on the render thread: creates the renderer, decodes and presents frames.
 void VideoPlayer::renderLoop() {
-    if (!m_renderer.initRenderer()) { m_quit = true; return; }
+    
+    if (!m_renderer.initRenderer()) { 
+        m_quit = true; 
+        return; 
+    }
 
     const double audioLatency = m_renderer.getAudioLatency();
     const double SEEK_STEP    = 10.0;
@@ -34,47 +40,69 @@ void VideoPlayer::renderLoop() {
     bool     paused     = false;
     double   currentPts = 0.0;
     float    lastSpeed  = 1.0f;
+    double   target     = 0.0;
 
     while (!m_quit) {
         PlayerEvent ev = m_renderer.pollEvents();
 
-        if (ev == PlayerEvent::Quit) break;
+        if (ev == PlayerEvent::Quit) {
+            break;
+        }
 
         switch (ev) {
             case PlayerEvent::TogglePause:
                 paused = !paused;
-                if (paused) m_renderer.pauseAudio();
-                else      { m_renderer.resumeAudio(); reclock = true; }
+                if (paused) { 
+                    m_renderer.pauseAudio();
+                }
+                else { 
+                    m_renderer.resumeAudio(); 
+                    reclock = true; 
+                }
                 break;
 
             case PlayerEvent::SeekForward:
-            case PlayerEvent::SeekBackward: {
-                double target = currentPts + (ev == PlayerEvent::SeekForward ? SEEK_STEP : -SEEK_STEP);
+            case PlayerEvent::SeekBackward: 
+                target = currentPts + (ev == PlayerEvent::SeekForward ? SEEK_STEP : -SEEK_STEP);
                 target = std::max(0.0, std::min(target, duration));
                 if (m_decoder.seek(target)) {
                     m_renderer.flushAudio();
                     reclock = true;
-                    if (paused) { paused = false; m_renderer.resumeAudio(); }
+
+                    if (paused) { 
+                        paused = false; 
+                        m_renderer.resumeAudio(); 
+                    }
                 }
                 break;
-            }
-
-            case PlayerEvent::SeekTo: {
-                double target = m_renderer.getSeekTarget() * duration;
+            case PlayerEvent::SeekTo:
+                target = m_renderer.getSeekTarget() * duration;
                 target = std::max(0.0, std::min(target, duration));
+                
                 if (m_decoder.seek(target)) {
                     m_renderer.flushAudio();
                     reclock = true;
-                    if (paused) { paused = false; m_renderer.resumeAudio(); }
+
+                    if (paused) { 
+                        paused = false; 
+                        m_renderer.resumeAudio(); 
+                    }
                 }
                 break;
-            }
-
-            case PlayerEvent::VolumeUp:        m_renderer.adjustVolume( 0.1f); break;
-            case PlayerEvent::VolumeDown:       m_renderer.adjustVolume(-0.1f); break;
-            case PlayerEvent::ToggleFullscreen: m_renderer.toggleFullscreen();  break;
-            case PlayerEvent::SpeedChange:      reclock = true;                 break;
-            default: break;
+            case PlayerEvent::VolumeUp:        
+                m_renderer.adjustVolume( 0.1f); 
+                break;
+            case PlayerEvent::VolumeDown:
+                m_renderer.adjustVolume(-0.1f); 
+                break;
+            case PlayerEvent::ToggleFullscreen: 
+                m_renderer.toggleFullscreen();  
+                break;
+            case PlayerEvent::SpeedChange:      
+                reclock = true;                 
+                break;
+            default: 
+                break;
         }
 
         float curSpeed = m_renderer.getSpeed();
@@ -88,7 +116,9 @@ void VideoPlayer::renderLoop() {
         }
 
         DecodedFrame frame;
-        if (!m_decoder.readFrame(frame)) break;
+        if (!m_decoder.readFrame(frame)) {
+            break;
+        }
 
         if (frame.audioFrame) {
             AVFrame* f = frame.audioFrame;
@@ -110,8 +140,10 @@ void VideoPlayer::renderLoop() {
             float  speed      = m_renderer.getSpeed();
             double targetWall = (frame.pts - startPts) / speed + audioLatency;
             double wall       = static_cast<double>(SDL_GetTicks() - startTick) / 1000.0;
-            if (targetWall > wall)
+            
+            if (targetWall > wall){
                 SDL_Delay(static_cast<Uint32>((targetWall - wall) * 1000.0));
+            }
 
             m_renderer.renderFrame(
                 f->data[0], f->linesize[0],
