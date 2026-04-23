@@ -148,3 +148,24 @@
 > Update Prompts.md
 
 #### No edits
+
+### Prompt 7
+> Add common audio sample rates and bytes per sample to constants
+
+#### No edits
+
+### Prompt 8
+
+> Consolidate contants to remove duplicates
+
+#### Rejected change as Claude wanted to keep both duplicate values instead of replacing one with the other
+
+### Prompt 9
+> Add common audio channels to constants
+
+#### User rejected keeping AUDIO_CHANNELS and redirected to replace it with CHANNELS_STEREO everywhere instead.
+
+### Prompt 10
+> Update Prompts.md
+
+#### Multiple prompts missed (7 and 8) and added in.
