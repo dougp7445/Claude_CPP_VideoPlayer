@@ -40,6 +40,16 @@ include(GoogleTest)
 gtest_discover_tests(DecoderTests)
 
 
+# FileOperations Tests
+add_executable(FileOperationsTests FileOperationsTests.cpp ../src/FileOperations.cpp)
+
+target_include_directories(FileOperationsTests PRIVATE ../include)
+
+target_link_libraries(FileOperationsTests PRIVATE gtest_main)
+
+gtest_discover_tests(FileOperationsTests)
+
+
 # Renderer Tests
 add_executable(RendererTests
     RendererTests.cpp
@@ -79,3 +89,52 @@ add_custom_command(TARGET RendererTests POST_BUILD
 )
 
 gtest_discover_tests(RendererTests)
+
+
+# VideoPlayer Tests
+add_executable(VideoPlayerTests
+    VideoPlayerTests.cpp
+    ../src/Decoder.cpp
+    ../src/FileOperations.cpp
+    ../src/MenuUI.cpp
+    ../src/PlayerUI.cpp
+    ../src/RecentFiles.cpp
+    ../src/Renderer.cpp
+    ../src/VideoPlayer.cpp
+)
+
+target_include_directories(VideoPlayerTests PRIVATE
+    ../include
+    "${FFMPEG_DIR}/include"
+    "${SDL_DIR}/include"
+    "${NANOSVG_DIR}"
+)
+
+target_link_libraries(VideoPlayerTests PRIVATE
+    gtest_main
+    "${FFMPEG_DIR}/lib/avcodec.lib"
+    "${FFMPEG_DIR}/lib/avformat.lib"
+    "${FFMPEG_DIR}/lib/avutil.lib"
+    "${FFMPEG_DIR}/lib/swscale.lib"
+    "${FFMPEG_DIR}/lib/swresample.lib"
+    "${SDL_DIR}/lib/x64/SDL3.lib"
+)
+
+target_compile_definitions(VideoPlayerTests PRIVATE
+    TEST_RESOURCES_DIR="${CMAKE_SOURCE_DIR}/resources"
+)
+
+add_custom_command(TARGET VideoPlayerTests POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${FFMPEG_DLLS}
+        "${SDL_DIR}/lib/x64/SDL3.dll"
+        $<TARGET_FILE_DIR:VideoPlayerTests>
+)
+
+add_custom_command(TARGET VideoPlayerTests POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/resources/icons"
+        "$<TARGET_FILE_DIR:VideoPlayerTests>/icons"
+)
+
+gtest_discover_tests(VideoPlayerTests)

@@ -1,9 +1,11 @@
 #pragma once
 
 #include "Decoder.h"
+#include "FileOperations.h"
 #include "Renderer.h"
 #include "RecentFiles.h"
 #include <atomic>
+#include <functional>
 #include <string>
 
 class VideoPlayer {
@@ -12,7 +14,7 @@ public:
     ~VideoPlayer();
 
     bool load(const std::string& filePath);
-    void run();
+    void run(std::function<std::string()> filePicker = openFileDialog);
 
 private:
     void renderLoop();
