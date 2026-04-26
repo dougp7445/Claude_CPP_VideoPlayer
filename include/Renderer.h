@@ -19,6 +19,10 @@ public:
 
     void shutdown();
 
+    // Recreate the YUV texture for a new video without destroying the window.
+    // Call this from the main thread after the render thread has been joined.
+    bool reloadVideo(const std::string& title, int width, int height);
+
     // Render the decoded YUV video frame (does not present).
     void renderFrame(const uint8_t* yPlane, int yPitch,
                      const uint8_t* uPlane, int uPitch,
@@ -36,6 +40,9 @@ public:
     void resumeAudio();
     void adjustVolume(float delta);
     void toggleFullscreen();
+
+    void   setRecentFiles(const std::vector<std::string>& files);
+    std::string takePendingOpenPath();
 
     double getAudioClock()   const;
     double getAudioLatency() const { return m_audioLatencyS; }

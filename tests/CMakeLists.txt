@@ -44,6 +44,7 @@ gtest_discover_tests(DecoderTests)
 add_executable(RendererTests
     RendererTests.cpp
     ../src/Renderer.cpp
+    ../src/MenuUI.cpp
     ../src/PlayerUI.cpp
     ../src/Decoder.cpp
 )

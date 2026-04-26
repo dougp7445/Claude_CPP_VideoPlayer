@@ -101,6 +101,18 @@ void PlayerUI::cycleSpeed() {
     m_speed      = SPEEDS[m_speedIndex];
 }
 
+void PlayerUI::handleMouseMotion(float mx, float my) {
+    m_menu.handleMouseMotion(mx, my);
+}
+
+void PlayerUI::setRecentFiles(const std::vector<std::string>& files) {
+    m_menu.setRecentFiles(files);
+}
+
+std::string PlayerUI::takePendingOpenPath() {
+    return m_menu.takePendingPath();
+}
+
 // ── Rendering ────────────────────────────────────────────────────────────────
 
 void PlayerUI::render(SDL_Renderer* renderer,
@@ -252,6 +264,8 @@ void PlayerUI::render(SDL_Renderer* renderer,
 
     m_volumeBarX = volBarX; m_volumeBarW = volBarW;
     m_volumeBarY = barY;    m_volumeBarH = barH;
+
+    m_menu.render(renderer, W);
 }
 
 // ── Hit testing ──────────────────────────────────────────────────────────────
@@ -263,6 +277,13 @@ PlayerEvent PlayerUI::handleMouseClick(float mx, float my) {
     auto hitXYWH = [](float x, float y, float rx, float ry, float rw, float rh) {
         return x >= rx && x < rx + rw && y >= ry && y < ry + rh;
     };
+
+    // ── Menu bar / dropdown — highest priority ──
+    {
+        bool consumed = false;
+        PlayerEvent menuEv = m_menu.handleMouseClick(mx, my, consumed);
+        if (consumed) return menuEv;
+    }
 
     if (hit(mx, my, m_playPauseRect))
         return PlayerEvent::TogglePause;

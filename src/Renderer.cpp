@@ -46,32 +46,38 @@ bool Renderer::initWindow(const std::string& title, int width, int height) {
 }
 
 bool Renderer::initRenderer() {
-    m_renderer = SDL_CreateRenderer(m_window, nullptr);
     if (!m_renderer) {
-        std::cerr << "SDL_CreateRenderer failed: " << SDL_GetError() << "\n";
-        return false;
+        m_renderer = SDL_CreateRenderer(m_window, nullptr);
+        if (!m_renderer) {
+            std::cerr << "SDL_CreateRenderer failed: " << SDL_GetError() << "\n";
+            return false;
+        }
     }
 
-    m_texture = SDL_CreateTexture(m_renderer,
-        SDL_PIXELFORMAT_IYUV,
-        SDL_TEXTUREACCESS_STREAMING,
-        m_width, m_height);
     if (!m_texture) {
-        std::cerr << "SDL_CreateTexture failed: " << SDL_GetError() << "\n";
-        return false;
+        m_texture = SDL_CreateTexture(m_renderer,
+            SDL_PIXELFORMAT_IYUV,
+            SDL_TEXTUREACCESS_STREAMING,
+            m_width, m_height);
+        if (!m_texture) {
+            std::cerr << "SDL_CreateTexture failed: " << SDL_GetError() << "\n";
+            return false;
+        }
     }
 
-    SDL_AudioSpec spec{};
-    spec.format   = SDL_AUDIO_S16;
-    spec.channels = CHANNELS_STEREO;
-    spec.freq     = SAMPLE_RATE_44K;
-    m_bytesPerSecond = SAMPLE_RATE_44K * CHANNELS_STEREO * BYTES_PER_SAMPLE_16BIT;
+    if (!m_audioStream) {
+        SDL_AudioSpec spec{};
+        spec.format   = SDL_AUDIO_S16;
+        spec.channels = CHANNELS_STEREO;
+        spec.freq     = SAMPLE_RATE_44K;
+        m_bytesPerSecond = SAMPLE_RATE_44K * CHANNELS_STEREO * BYTES_PER_SAMPLE_16BIT;
 
-    m_audioStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
-                                              &spec, nullptr, nullptr);
-    if (m_audioStream) {
-        SDL_ResumeAudioStreamDevice(m_audioStream);
-        measureAudioLatency();
+        m_audioStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
+                                                  &spec, nullptr, nullptr);
+        if (m_audioStream) {
+            SDL_ResumeAudioStreamDevice(m_audioStream);
+            measureAudioLatency();
+        }
     }
 
     return true;
@@ -107,6 +113,49 @@ void Renderer::measureAudioLatency() {
     }
 
     std::cout << "Audio latency: " << static_cast<int>(m_audioLatencyS * 1000.0) << " ms\n";
+}
+
+bool Renderer::reloadVideo(const std::string& title, int width, int height) {
+    if (m_fullscreen) {
+        SDL_SetWindowFullscreen(m_window, false);
+        m_fullscreen = false;
+    }
+
+    if (m_texture) { SDL_DestroyTexture(m_texture); m_texture = nullptr; }
+
+    m_width  = width;
+    m_height = height;
+
+    m_texture = SDL_CreateTexture(m_renderer, SDL_PIXELFORMAT_IYUV,
+                                  SDL_TEXTUREACCESS_STREAMING, m_width, m_height);
+    if (!m_texture) {
+        std::cerr << "SDL_CreateTexture failed: " << SDL_GetError() << "\n";
+        return false;
+    }
+
+    SDL_DisplayID disp = SDL_GetPrimaryDisplay();
+    const SDL_DisplayMode* mode = SDL_GetCurrentDisplayMode(disp);
+    int winW = width, winH = height;
+    if (mode) {
+        int maxW = static_cast<int>(mode->w * WINDOW_MAX_DISPLAY_FRACTION);
+        int maxH = static_cast<int>(mode->h * WINDOW_MAX_DISPLAY_FRACTION);
+        if (winW > maxW || winH > maxH) {
+            float sc = std::min(static_cast<float>(maxW) / winW,
+                                static_cast<float>(maxH) / winH);
+            winW = static_cast<int>(winW * sc);
+            winH = static_cast<int>(winH * sc);
+        }
+    }
+    SDL_SetWindowSize(m_window, winW, winH);
+    SDL_SetWindowTitle(m_window, title.c_str());
+
+    if (m_audioStream) {
+        SDL_FlushAudioStream(m_audioStream);
+        m_totalBytesQueued = 0;
+        SDL_ResumeAudioStreamDevice(m_audioStream);
+    }
+
+    return true;
 }
 
 void Renderer::shutdown() {
@@ -218,6 +267,14 @@ double Renderer::getAudioClock() const {
     return std::max(0.0, static_cast<double>(played) / m_bytesPerSecond);
 }
 
+void Renderer::setRecentFiles(const std::vector<std::string>& files) {
+    m_ui.setRecentFiles(files);
+}
+
+std::string Renderer::takePendingOpenPath() {
+    return m_ui.takePendingOpenPath();
+}
+
 void Renderer::syncAudio() {
 
     if (!m_audioStream)
@@ -263,8 +320,12 @@ PlayerEvent Renderer::pollEvents() {
                     m_ui.adjustVolume(-VOLUME_KEY_DELTA);
                     syncAudio();
                     break;
-                case SDLK_F:      
+                case SDLK_F:
                     playerEvent = PlayerEvent::ToggleFullscreen;
+                    break;
+                case SDLK_O:
+                    if (event.key.mod & SDL_KMOD_CTRL)
+                        playerEvent = PlayerEvent::OpenFile;
                     break;
                 case SDLK_S:      
                     m_ui.cycleSpeed(); 
@@ -278,6 +339,7 @@ PlayerEvent Renderer::pollEvents() {
 
         case SDL_EVENT_MOUSE_MOTION:
             m_ui.onActivity();
+            m_ui.handleMouseMotion(event.motion.x, event.motion.y);
             break;
 
         case SDL_EVENT_MOUSE_BUTTON_DOWN:

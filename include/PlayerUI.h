@@ -2,7 +2,10 @@
 
 #include <SDL3/SDL.h>
 #include <cstdint>
+#include <string>
+#include <vector>
 #include "PlayerEvent.h"
+#include "MenuUI.h"
 
 class PlayerUI {
 public:
@@ -24,6 +27,12 @@ public:
 
     // Advance to the next speed step (0.5x → 1x → 1.5x → 2x, wraps).
     void cycleSpeed();
+
+    // Track mouse position for hover highlighting in the menu bar.
+    void handleMouseMotion(float mx, float my);
+
+    void setRecentFiles(const std::vector<std::string>& files);
+    std::string takePendingOpenPath();
 
     double getSeekTarget() const { return m_seekTarget; }
     float  getSpeed()      const { return m_speed; }
@@ -53,6 +62,8 @@ private:
     float m_volumeBarW   = 0, m_volumeBarH   = 0;
     SDL_FRect m_muteRect  = {};
     SDL_FRect m_speedRect = {};
+
+    MenuUI m_menu;
 
     SDL_Texture* m_volFullTex     = nullptr;
     SDL_Texture* m_volMutedTex    = nullptr;

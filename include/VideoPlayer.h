@@ -2,6 +2,7 @@
 
 #include "Decoder.h"
 #include "Renderer.h"
+#include "RecentFiles.h"
 #include <atomic>
 #include <string>
 
@@ -20,4 +21,7 @@ private:
     Renderer m_renderer;
 
     std::atomic<bool> m_quit{false};
+    std::atomic<bool> m_requestOpenFile{false};
+
+    RecentFiles m_recentFiles;
 };

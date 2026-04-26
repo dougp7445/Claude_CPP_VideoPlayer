@@ -3,19 +3,89 @@
 #include <algorithm>
 #include <cstdint>
 #include <iostream>
+#include <string>
 #include <thread>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#include <shobjidl.h>
+#endif
+
+static std::string executableDir() {
+#ifdef _WIN32
+    wchar_t buf[MAX_PATH];
+    DWORD len = GetModuleFileNameW(nullptr, buf, MAX_PATH);
+    if (len == 0) return "";
+    std::wstring wpath(buf, len);
+    auto pos = wpath.rfind(L'\\');
+    if (pos != std::wstring::npos) wpath.resize(pos + 1);
+    int n = WideCharToMultiByte(CP_UTF8, 0, wpath.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    if (n <= 0) return "";
+    std::string result(n - 1, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, wpath.c_str(), -1, result.data(), n, nullptr, nullptr);
+    return result;
+#else
+    return "";
+#endif
+}
+
+static std::string openFileDialog() {
+#ifdef _WIN32
+    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+
+    std::string result;
+    IFileOpenDialog* pfd = nullptr;
+    if (SUCCEEDED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER,
+                                   IID_PPV_ARGS(&pfd)))) {
+        COMDLG_FILTERSPEC filters[] = {
+            { L"Video Files", L"*.mp4;*.mkv;*.avi;*.mov;*.wmv;*.flv;*.webm;*.m4v;*.ts;*.mpg;*.mpeg" },
+            { L"All Files",   L"*.*" }
+        };
+        pfd->SetFileTypes(2, filters);
+        pfd->SetDefaultExtension(L"mp4");
+
+        if (SUCCEEDED(pfd->Show(nullptr))) {
+            IShellItem* psi = nullptr;
+            if (SUCCEEDED(pfd->GetResult(&psi))) {
+                PWSTR path = nullptr;
+                if (SUCCEEDED(psi->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
+                    int len = WideCharToMultiByte(CP_UTF8, 0, path, -1, nullptr, 0, nullptr, nullptr);
+                    if (len > 0) {
+                        result.resize(len - 1);
+                        WideCharToMultiByte(CP_UTF8, 0, path, -1, result.data(), len, nullptr, nullptr);
+                    }
+                    CoTaskMemFree(path);
+                }
+                psi->Release();
+            }
+        }
+        pfd->Release();
+    }
+
+    CoUninitialize();
+    return result;
+#else
+    return {};
+#endif
+}
 
 extern "C" {
 #include <libavutil/frame.h>
 }
 
-VideoPlayer::VideoPlayer() = default;
+VideoPlayer::VideoPlayer()
+    : m_recentFiles(executableDir() + "recent_files.json")
+{}
 VideoPlayer::~VideoPlayer() = default;
 
 bool VideoPlayer::load(const std::string& filePath) {
     if (!m_decoder.open(filePath)) {
         return false;
-    } 
+    }
+    m_recentFiles.add(filePath);
+    m_renderer.setRecentFiles(m_recentFiles.entries());
     // initWindow must run on the main thread (OS window creation).
     return m_renderer.initWindow("VideoPlayer - " + filePath,
                                  m_decoder.videoWidth(),
@@ -47,6 +117,11 @@ void VideoPlayer::renderLoop() {
         PlayerEvent ev = m_renderer.pollEvents();
 
         if (ev == PlayerEvent::Quit) {
+            break;
+        }
+
+        if (ev == PlayerEvent::OpenFile) {
+            m_requestOpenFile = true;
             break;
         }
 
@@ -162,18 +237,34 @@ void VideoPlayer::renderLoop() {
 }
 
 void VideoPlayer::run() {
-    m_quit = false;
+    while (true) {
+        m_quit            = false;
+        m_requestOpenFile = false;
 
-    // Render thread owns the SDL renderer and does all drawing.
-    std::thread rt([this]() { renderLoop(); });
+        std::thread rt([this]() { renderLoop(); });
 
-    // Main thread pumps OS window messages so SDL's event queue stays fed.
-    // SDL_PeepEvents (used by the render thread) is thread-safe and reads
-    // from this queue without needing to be on the main thread.
-    while (!m_quit) {
-        SDL_PumpEvents();
-        SDL_Delay(1);
+        while (!m_quit) {
+            SDL_PumpEvents();
+            SDL_Delay(1);
+        }
+
+        rt.join();
+
+        if (!m_requestOpenFile) break;
+
+        // Check if the user selected a recent file from the menu; otherwise show the picker.
+        std::string newPath = m_renderer.takePendingOpenPath();
+        if (newPath.empty()) newPath = openFileDialog();
+        if (newPath.empty()) continue;
+
+        m_decoder.close();
+        if (!m_decoder.open(newPath)) break;
+
+        m_recentFiles.add(newPath);
+        m_renderer.setRecentFiles(m_recentFiles.entries());
+
+        if (!m_renderer.reloadVideo("VideoPlayer - " + newPath,
+                                    m_decoder.videoWidth(),
+                                    m_decoder.videoHeight())) break;
     }
-
-    rt.join();
 }
