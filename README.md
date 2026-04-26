@@ -63,6 +63,8 @@ To play any other video file:
 ./build/Release/VideoPlayer.exe path/to/your/video.mp4
 ```
 
+If no file argument is provided, a native Windows file picker dialog opens automatically.
+
 ### Testing
 
 Build first, then run the unit tests with:
@@ -80,25 +82,34 @@ This runs all GoogleTests via CTest and prints output only for failing tests. Go
 | Input | Action |
 |---|---|
 | `Space` | Play / Pause |
+| `Left` / `Right` arrow | Seek backward / forward |
 | Click progress bar | Seek to position |
-| `0.5x` / `1x` / `1.5x` / `2x` buttons | Change playback speed |
+| `Up` / `Down` arrow | Volume up / down |
+| Mouse wheel | Volume up / down |
+| `S` | Cycle playback speed (0.5x → 1x → 1.5x → 2x) |
 | Volume icon | Toggle mute |
-| `F` or fullscreen button | Toggle fullscreen |
+| `F` | Toggle fullscreen |
+| `Ctrl+O` | Open file picker |
+| `File` menu | Open file picker or reopen a recent file |
 | Move mouse | Show control bar (auto-hides after 3 seconds) |
+| `Escape` | Quit |
 
 ---
 
 ## Architecture
 
-The player is split across five source files:
+The player is split across these source files:
 
 | File | Responsibility |
 |---|---|
-| `main.cpp` | Entry point, argument validation |
+| `main.cpp` | Entry point, argument parsing |
 | `VideoPlayer.cpp` | Orchestrates playback loop across two threads |
 | `Decoder.cpp` | FFmpeg decoding and audio resampling |
 | `Renderer.cpp` | SDL3 window, YUV rendering, audio output |
 | `PlayerUI.cpp` | Control bar UI, hit-testing, auto-hide logic |
+| `MenuUI.cpp` | Top menu bar with File dropdown and Recent Files submenu |
+| `RecentFiles.cpp` | Tracks the last 10 opened files, persisted to `recent_files.json` |
+| `FileOperations.cpp` | Native OS file picker dialog and executable directory resolution |
 
 Playback is synchronized to the audio clock with latency compensation. The main thread pumps OS window events while a dedicated render thread owns SDL and handles all drawing.
 

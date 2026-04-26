@@ -1,4 +1,5 @@
-#pragma once
+#ifndef MENU_UI_H
+#define MENU_UI_H
 
 #include <SDL3/SDL.h>
 #include <string>
@@ -34,3 +35,5 @@ private:
     std::vector<SDL_FRect>   m_recentItemRects;
     std::string              m_pendingPath;
 };
+
+#endif // MENU_UI_H

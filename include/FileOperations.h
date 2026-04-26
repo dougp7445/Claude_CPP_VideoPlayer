@@ -1,4 +1,5 @@
-#pragma once
+#ifndef FILE_OPERATIONS_H
+#define FILE_OPERATIONS_H
 
 #include <string>
 
@@ -9,3 +10,5 @@ std::string executableDir();
 // Shows a native OS file-open dialog filtered to common video formats.
 // Returns the selected path, or an empty string if canceled.
 std::string openFileDialog();
+
+#endif // FILE_OPERATIONS_H

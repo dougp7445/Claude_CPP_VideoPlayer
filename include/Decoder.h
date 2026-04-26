@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DECODER_H
+#define DECODER_H
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -47,3 +48,5 @@ private:
     bool initVideoCodec();
     bool initAudioCodec();
 };
+
+#endif // DECODER_H
