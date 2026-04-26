@@ -161,10 +161,18 @@ bool Renderer::reloadVideo(const std::string& title, int width, int height) {
 }
 
 void Renderer::shutdown() {
-    if (m_audioStream) { SDL_DestroyAudioStream(m_audioStream); m_audioStream = nullptr; }
-    if (m_texture)     { SDL_DestroyTexture(m_texture);         m_texture     = nullptr; }
-    if (m_renderer)    { SDL_DestroyRenderer(m_renderer);       m_renderer    = nullptr; }
-    if (m_window)      { SDL_DestroyWindow(m_window);           m_window      = nullptr; }
+    if (m_audioStream) { 
+        SDL_DestroyAudioStream(m_audioStream); m_audioStream = nullptr; 
+    }
+    if (m_texture) { 
+        SDL_DestroyTexture(m_texture);         m_texture     = nullptr; 
+    }
+    if (m_renderer) { 
+        SDL_DestroyRenderer(m_renderer);       m_renderer    = nullptr; 
+    }
+    if (m_window) { 
+        SDL_DestroyWindow(m_window);           m_window      = nullptr; 
+    }
     SDL_Quit();
 }
 
@@ -214,8 +222,7 @@ void Renderer::present() {
 // ── Audio ────────────────────────────────────────────────────────────────────
 
 void Renderer::queueAudio(const uint8_t* data, int size) {
-    if (!m_audioStream)
-    {
+    if (!m_audioStream) {
         return;
     }
     
@@ -224,8 +231,7 @@ void Renderer::queueAudio(const uint8_t* data, int size) {
 }
 
 void Renderer::flushAudio() {
-    if (!m_audioStream)
-    {
+    if (!m_audioStream) {
         return;
     }
     
@@ -325,8 +331,9 @@ PlayerEvent Renderer::pollEvents() {
                     playerEvent = PlayerEvent::ToggleFullscreen;
                     break;
                 case SDLK_O:
-                    if (event.key.mod & SDL_KMOD_CTRL)
+                    if (event.key.mod & SDL_KMOD_CTRL) {
                         playerEvent = PlayerEvent::OpenFile;
+                    }
                     break;
                 case SDLK_S:      
                     m_ui.cycleSpeed(); 
