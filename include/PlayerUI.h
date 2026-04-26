@@ -1,4 +1,5 @@
-#pragma once
+#ifndef PLAYER_UI_H
+#define PLAYER_UI_H
 
 #include <SDL3/SDL.h>
 #include <cstdint>
@@ -71,3 +72,5 @@ private:
 
     void initTextures(SDL_Renderer* renderer);
 };
+
+#endif // PLAYER_UI_H

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef RECENT_FILES_H
+#define RECENT_FILES_H
 
 #include <string>
 #include <vector>
@@ -21,3 +22,5 @@ private:
 
     static constexpr int MAX_ENTRIES = 10;
 };
+
+#endif // RECENT_FILES_H

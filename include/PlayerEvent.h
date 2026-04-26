@@ -1,4 +1,5 @@
-#pragma once
+#ifndef PLAYER_EVENT_H
+#define PLAYER_EVENT_H
 
 enum class PlayerEvent {
     None,
@@ -13,3 +14,5 @@ enum class PlayerEvent {
     SpeedChange,
     OpenFile,
 };
+
+#endif // PLAYER_EVENT_H

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef RENDERER_H
+#define RENDERER_H
 
 #include <SDL3/SDL.h>
 #include <string>
@@ -72,3 +73,5 @@ private:
     // Sync SDL audio gain and speed ratio from current UI state.
     void syncAudio();
 };
+
+#endif // RENDERER_H

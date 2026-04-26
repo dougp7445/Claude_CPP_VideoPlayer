@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VIDEO_PLAYER_H
+#define VIDEO_PLAYER_H
 
 #include "Decoder.h"
 #include "FileOperations.h"
@@ -27,3 +28,5 @@ private:
 
     RecentFiles m_recentFiles;
 };
+
+#endif // VIDEO_PLAYER_H

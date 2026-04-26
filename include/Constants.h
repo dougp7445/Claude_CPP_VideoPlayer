@@ -1,4 +1,5 @@
-#pragma once
+#ifndef CONSTANTS_H
+#define CONSTANTS_H
 
 // ── Audio pipeline ────────────────────────────────────────────────────────────
 // Shared between Decoder (resampling target) and Renderer (output spec).
@@ -72,3 +73,5 @@ static constexpr int BITRATE_1440P_HIGH  = 16000000; // 16.0 Mbps
 static constexpr int BITRATE_4K_LOW      = 15000000; // 15.0 Mbps
 static constexpr int BITRATE_4K_MED      = 25000000; // 25.0 Mbps
 static constexpr int BITRATE_4K_HIGH     = 45000000; // 45.0 Mbps
+
+#endif // CONSTANTS_H
