@@ -32,8 +32,8 @@ static std::string formatTime(double secs) {
     int m = (t % 3600) / 60;
     int s = t % 60;
     char buf[16];
-    if (h > 0) snprintf(buf, sizeof(buf), "%d:%02d:%02d", h, m, s);
-    else        snprintf(buf, sizeof(buf), "%02d:%02d",    m, s);
+    if (h > 0) { snprintf(buf, sizeof(buf), "%d:%02d:%02d", h, m, s); }
+    else        { snprintf(buf, sizeof(buf), "%02d:%02d",    m, s); }
     return buf;
 }
 
@@ -41,7 +41,7 @@ static std::string formatTime(double secs) {
 
 static SDL_Texture* loadSVGTexture(SDL_Renderer* renderer, const char* path, int size) {
     NSVGimage* image = nsvgParseFromFile(path, "px", 96.0f);
-    if (!image) return nullptr;
+    if (!image) { return nullptr; }
 
     NSVGrasterizer* rast = nsvgCreateRasterizer();
     if (!rast) { nsvgDelete(image); return nullptr; }
@@ -55,17 +55,18 @@ static SDL_Texture* loadSVGTexture(SDL_Renderer* renderer, const char* path, int
     // SVGs use fill="#000000"; recolor non-transparent pixels to white so they
     // composite correctly over the dark control bar.
     for (size_t i = 0; i < pixels.size(); i += 4) {
-        if (pixels[i + 3] > 0)
+        if (pixels[i + 3] > 0) {
             pixels[i] = pixels[i + 1] = pixels[i + 2] = 255;
+        }
     }
 
     SDL_Surface* surf = SDL_CreateSurfaceFrom(size, size, SDL_PIXELFORMAT_RGBA32,
                                               pixels.data(), size * 4);
-    if (!surf) return nullptr;
+    if (!surf) { return nullptr; }
 
     SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
     SDL_DestroySurface(surf);
-    if (tex) SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+    if (tex) { SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND); }
     return tex;
 }
 
@@ -118,7 +119,7 @@ std::string PlayerUI::takePendingOpenPath() {
 void PlayerUI::render(SDL_Renderer* renderer,
                       double currentPts, double duration, bool paused) {
     // Lazy-init the activity timer so the bar is visible at startup.
-    if (m_lastActivityMs == 0) m_lastActivityMs = SDL_GetTicks();
+    if (m_lastActivityMs == 0) { m_lastActivityMs = SDL_GetTicks(); }
 
     if (!m_texturesLoaded) { initTextures(renderer); m_texturesLoaded = true; }
 
@@ -137,7 +138,7 @@ void PlayerUI::render(SDL_Renderer* renderer,
         }
     }
 
-    if (!m_uiVisible) return;
+    if (!m_uiVisible) { return; }
 
     int outW = 0, outH = 0;
     SDL_GetRenderOutputSize(renderer, &outW, &outH);
@@ -282,7 +283,7 @@ PlayerEvent PlayerUI::handleMouseClick(float mx, float my) {
     {
         bool consumed = false;
         PlayerEvent menuEv = m_menu.handleMouseClick(mx, my, consumed);
-        if (consumed) return menuEv;
+        if (consumed) { return menuEv; }
     }
 
     if (hit(mx, my, m_playPauseRect))

@@ -58,8 +58,8 @@ TEST(DecoderTest, ReadFrameProducesVideoFrame) {
     DecodedFrame frame;
     bool gotVideo = false;
     for (int i = 0; i < 32 && !gotVideo; ++i) {
-        if (!d.readFrame(frame)) break;
-        if (frame.videoFrame) gotVideo = true;
+        if (!d.readFrame(frame)) { break; }
+        if (frame.videoFrame) { gotVideo = true; }
         av_frame_free(&frame.videoFrame);
         av_frame_free(&frame.audioFrame);
     }
@@ -84,7 +84,7 @@ TEST(DecoderTest, ConsecutiveFramesPtsIncrease) {
     double prevPts = -1.0;
     for (int i = 0; i < 16; ++i) {
         DecodedFrame frame;
-        if (!d.readFrame(frame)) break;
+        if (!d.readFrame(frame)) { break; }
         EXPECT_GE(frame.pts, prevPts);
         prevPts = frame.pts;
         av_frame_free(&frame.videoFrame);

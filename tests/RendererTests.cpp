@@ -186,9 +186,9 @@ protected:
     AVFrame* nextVideoFrame() {
         for (int i = 0; i < TEST_FRAME_SEARCH_LIMIT; ++i) {
             DecodedFrame frame;
-            if (!d.readFrame(frame)) break;
+            if (!d.readFrame(frame)) { break; }
             av_frame_free(&frame.audioFrame);
-            if (frame.videoFrame) return frame.videoFrame;
+            if (frame.videoFrame) { return frame.videoFrame; }
         }
         return nullptr;
     }
@@ -284,7 +284,7 @@ TEST_F(RendererSDLTest, QueueAudioAdvancesAudioClock) {
     // Decode an audio frame and queue its samples.
     for (int i = 0; i < 32; ++i) {
         DecodedFrame frame;
-        if (!d.readFrame(frame)) break;
+        if (!d.readFrame(frame)) { break; }
         av_frame_free(&frame.videoFrame);
         if (frame.audioFrame) {
             AVFrame* f = frame.audioFrame;

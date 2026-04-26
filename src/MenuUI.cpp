@@ -11,8 +11,9 @@ static constexpr size_t NAME_MAX     = 26;      // chars before truncation
 static std::string truncatedName(const std::string& path) {
     size_t sep = path.find_last_of("/\\");
     std::string name = (sep != std::string::npos) ? path.substr(sep + 1) : path;
-    if (name.size() > NAME_MAX)
+    if (name.size() > NAME_MAX) {
         name = name.substr(0, NAME_MAX - 3) + "...";
+    }
     return name;
 }
 
@@ -49,7 +50,7 @@ void MenuUI::render(SDL_Renderer* renderer, float W) {
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_RenderDebugText(renderer, MENU_PAD + 4.0f, (MENU_H - 8.0f) * 0.5f, "File");
 
-    if (!m_menuOpen) return;
+    if (!m_menuOpen) { return; }
 
     // ── Dropdown panel (two fixed rows: Open File + Recent Files) ──
     float dx = MENU_PAD;
@@ -108,7 +109,7 @@ void MenuUI::render(SDL_Renderer* renderer, float W) {
     SDL_RenderDebugText(renderer, dx + DROP_W - 8.0f - 8.0f,
                         rfY + (DROP_ITEM_H - 8.0f) * 0.5f, ">");
 
-    if (!m_subMenuVisible) return;
+    if (!m_subMenuVisible) { return; }
 
     // ── Submenu panel ──
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);

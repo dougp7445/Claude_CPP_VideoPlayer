@@ -186,19 +186,20 @@ void VideoPlayer::run(std::function<std::string()> filePicker) {
 
         rt.join();
 
-        if (!m_requestOpenFile) break;
+        if (!m_requestOpenFile) { break; }
 
         // Check if the user selected a recent file from the menu; otherwise show the picker.
         std::string newPath = m_renderer.takePendingOpenPath();
-        if (newPath.empty())
+        if (newPath.empty()) {
             newPath = filePicker();
+        }
         if (newPath.empty())
         {
             continue;
         } 
 
         m_decoder.close();
-        if (!m_decoder.open(newPath)) break;
+        if (!m_decoder.open(newPath)) { break; }
 
         m_recentFiles.add(newPath);
         m_renderer.setRecentFiles(m_recentFiles.entries());

@@ -11,12 +11,20 @@ std::string executableDir() {
 #ifdef _WIN32
     wchar_t buf[MAX_PATH];
     DWORD len = GetModuleFileNameW(nullptr, buf, MAX_PATH);
-    if (len == 0) return "";
+    if (len == 0) {
+        return "";
+    }
+
     std::wstring wpath(buf, len);
     auto pos = wpath.rfind(L'\\');
-    if (pos != std::wstring::npos) wpath.resize(pos + 1);
+    if (pos != std::wstring::npos) {
+        wpath.resize(pos + 1);
+    }
+
     int n = WideCharToMultiByte(CP_UTF8, 0, wpath.c_str(), -1, nullptr, 0, nullptr, nullptr);
-    if (n <= 0) return "";
+    if (n <= 0) {
+        return "";
+    }
     std::string result(n - 1, '\0');
     WideCharToMultiByte(CP_UTF8, 0, wpath.c_str(), -1, result.data(), n, nullptr, nullptr);
     return result;
