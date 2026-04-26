@@ -11,4 +11,5 @@ enum class PlayerEvent {
     VolumeDown,
     ToggleFullscreen,
     SpeedChange,
+    OpenFile,
 };

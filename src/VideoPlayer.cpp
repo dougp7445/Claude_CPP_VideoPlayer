@@ -1,21 +1,27 @@
 #include "VideoPlayer.h"
 #include "Constants.h"
+#include "FileOperations.h"
 #include <algorithm>
 #include <cstdint>
 #include <iostream>
+#include <string>
 #include <thread>
 
 extern "C" {
 #include <libavutil/frame.h>
 }
 
-VideoPlayer::VideoPlayer() = default;
+VideoPlayer::VideoPlayer()
+    : m_recentFiles(executableDir() + "recent_files.json")
+{}
 VideoPlayer::~VideoPlayer() = default;
 
 bool VideoPlayer::load(const std::string& filePath) {
     if (!m_decoder.open(filePath)) {
         return false;
-    } 
+    }
+    m_recentFiles.add(filePath);
+    m_renderer.setRecentFiles(m_recentFiles.entries());
     // initWindow must run on the main thread (OS window creation).
     return m_renderer.initWindow("VideoPlayer - " + filePath,
                                  m_decoder.videoWidth(),
@@ -47,6 +53,11 @@ void VideoPlayer::renderLoop() {
         PlayerEvent ev = m_renderer.pollEvents();
 
         if (ev == PlayerEvent::Quit) {
+            break;
+        }
+
+        if (ev == PlayerEvent::OpenFile) {
+            m_requestOpenFile = true;
             break;
         }
 
@@ -161,19 +172,40 @@ void VideoPlayer::renderLoop() {
     m_quit = true;
 }
 
-void VideoPlayer::run() {
-    m_quit = false;
+void VideoPlayer::run(std::function<std::string()> filePicker) {
+    while (true) {
+        m_quit            = false;
+        m_requestOpenFile = false;
 
-    // Render thread owns the SDL renderer and does all drawing.
-    std::thread rt([this]() { renderLoop(); });
+        std::thread rt([this]() { renderLoop(); });
 
-    // Main thread pumps OS window messages so SDL's event queue stays fed.
-    // SDL_PeepEvents (used by the render thread) is thread-safe and reads
-    // from this queue without needing to be on the main thread.
-    while (!m_quit) {
-        SDL_PumpEvents();
-        SDL_Delay(1);
+        while (!m_quit) {
+            SDL_PumpEvents();
+            SDL_Delay(1);
+        }
+
+        rt.join();
+
+        if (!m_requestOpenFile) { break; }
+
+        // Check if the user selected a recent file from the menu; otherwise show the picker.
+        std::string newPath = m_renderer.takePendingOpenPath();
+        if (newPath.empty()) {
+            newPath = filePicker();
+        }
+        if (newPath.empty())
+        {
+            continue;
+        } 
+
+        m_decoder.close();
+        if (!m_decoder.open(newPath)) { break; }
+
+        m_recentFiles.add(newPath);
+        m_renderer.setRecentFiles(m_recentFiles.entries());
+
+        if (!m_renderer.reloadVideo("VideoPlayer - " + newPath,
+                                    m_decoder.videoWidth(),
+                                    m_decoder.videoHeight())) break;
     }
-
-    rt.join();
 }
