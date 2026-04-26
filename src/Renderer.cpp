@@ -121,7 +121,9 @@ bool Renderer::reloadVideo(const std::string& title, int width, int height) {
         m_fullscreen = false;
     }
 
-    if (m_texture) { SDL_DestroyTexture(m_texture); m_texture = nullptr; }
+    if (m_texture) { 
+        SDL_DestroyTexture(m_texture); m_texture = nullptr; 
+    }
 
     m_width  = width;
     m_height = height;
@@ -277,8 +279,7 @@ std::string Renderer::takePendingOpenPath() {
 
 void Renderer::syncAudio() {
 
-    if (!m_audioStream)
-    {
+    if (!m_audioStream) {
         return;
     }
 
