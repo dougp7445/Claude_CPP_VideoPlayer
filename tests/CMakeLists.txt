@@ -8,7 +8,7 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 # Decoder Tests
-add_executable(DecoderTests DecoderTests.cpp ../src/Decoder.cpp)
+add_executable(DecoderTests DecoderTests.cpp ../src/Decoder.cpp ../src/Logger.cpp)
 
 target_include_directories(DecoderTests PRIVATE
     ../include
@@ -53,10 +53,11 @@ gtest_discover_tests(FileOperationsTests)
 # Renderer Tests
 add_executable(RendererTests
     RendererTests.cpp
-    ../src/Renderer.cpp
+    ../src/Decoder.cpp
+    ../src/Logger.cpp
     ../src/MenuUI.cpp
     ../src/PlayerUI.cpp
-    ../src/Decoder.cpp
+    ../src/Renderer.cpp
 )
 
 target_include_directories(RendererTests PRIVATE
@@ -96,6 +97,7 @@ add_executable(VideoPlayerTests
     VideoPlayerTests.cpp
     ../src/Decoder.cpp
     ../src/FileOperations.cpp
+    ../src/Logger.cpp
     ../src/MenuUI.cpp
     ../src/PlayerUI.cpp
     ../src/RecentFiles.cpp

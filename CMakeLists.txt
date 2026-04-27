@@ -12,6 +12,7 @@ add_executable(VideoPlayer
     src/main.cpp
     src/Decoder.cpp
     src/FileOperations.cpp
+    src/Logger.cpp
     src/MenuUI.cpp
     src/PlayerUI.cpp
     src/RecentFiles.cpp
