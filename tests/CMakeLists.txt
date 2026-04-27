@@ -6,6 +6,17 @@ FetchContent_Declare(
 # Prevent GoogleTest from overriding the parent project's compiler/linker settings on Windows.
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
+include(GoogleTest)
+
+# Logger Tests
+add_executable(LoggerTests LoggerTests.cpp ../src/Logger.cpp)
+
+target_include_directories(LoggerTests PRIVATE ../include)
+
+target_link_libraries(LoggerTests PRIVATE gtest_main)
+
+gtest_discover_tests(LoggerTests)
+
 
 # Decoder Tests
 add_executable(DecoderTests DecoderTests.cpp ../src/Decoder.cpp ../src/Logger.cpp)
@@ -36,7 +47,6 @@ add_custom_command(TARGET DecoderTests POST_BUILD
         $<TARGET_FILE_DIR:DecoderTests>
 )
 
-include(GoogleTest)
 gtest_discover_tests(DecoderTests)
 
 

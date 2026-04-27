@@ -15,6 +15,9 @@ Logger& Logger::instance() {
 void Logger::init(const std::string& filePath, Level minLevel, int maxFiles) {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_minLevel = minLevel;
+    if (m_file.is_open()) {
+        m_file.close();
+    }
     if (!filePath.empty()) {
         std::filesystem::path p(filePath);
         if (p.has_parent_path()) {
@@ -43,6 +46,7 @@ void Logger::init(const std::string& filePath, Level minLevel, int maxFiles) {
     }
 }
 
+void Logger::trace  (const std::string& msg) { log(Level::Trace,   msg); }
 void Logger::debug  (const std::string& msg) { log(Level::Debug,   msg); }
 void Logger::info   (const std::string& msg) { log(Level::Info,    msg); }
 void Logger::warning(const std::string& msg) { log(Level::Warning, msg); }
@@ -82,6 +86,7 @@ void Logger::log(Level level, const std::string& msg) {
 
 const char* Logger::levelTag(Level level) {
     switch (level) {
+        case Level::Trace:   return "TRACE";
         case Level::Debug:   return "DEBUG";
         case Level::Info:    return "INFO ";
         case Level::Warning: return "WARN ";

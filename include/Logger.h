@@ -7,7 +7,7 @@
 
 class Logger {
 public:
-    enum class Level { Debug, Info, Warning, Error };
+    enum class Level { Trace, Debug, Info, Warning, Error };
 
     static Logger& instance();
 
@@ -15,6 +15,7 @@ public:
     // Must be called before any log calls if file output is desired.
     void init(const std::string& filePath, Level minLevel = Level::Debug, int maxFiles = 10);
 
+    void trace  (const std::string& msg);
     void debug  (const std::string& msg);
     void info   (const std::string& msg);
     void warning(const std::string& msg);
