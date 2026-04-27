@@ -6,9 +6,20 @@ FetchContent_Declare(
 # Prevent GoogleTest from overriding the parent project's compiler/linker settings on Windows.
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
+include(GoogleTest)
+
+# Logger Tests
+add_executable(LoggerTests LoggerTests.cpp ../src/Logger.cpp)
+
+target_include_directories(LoggerTests PRIVATE ../include)
+
+target_link_libraries(LoggerTests PRIVATE gtest_main)
+
+gtest_discover_tests(LoggerTests)
+
 
 # Decoder Tests
-add_executable(DecoderTests DecoderTests.cpp ../src/Decoder.cpp)
+add_executable(DecoderTests DecoderTests.cpp ../src/Decoder.cpp ../src/Logger.cpp)
 
 target_include_directories(DecoderTests PRIVATE
     ../include
@@ -36,7 +47,6 @@ add_custom_command(TARGET DecoderTests POST_BUILD
         $<TARGET_FILE_DIR:DecoderTests>
 )
 
-include(GoogleTest)
 gtest_discover_tests(DecoderTests)
 
 
@@ -53,10 +63,11 @@ gtest_discover_tests(FileOperationsTests)
 # Renderer Tests
 add_executable(RendererTests
     RendererTests.cpp
-    ../src/Renderer.cpp
+    ../src/Decoder.cpp
+    ../src/Logger.cpp
     ../src/MenuUI.cpp
     ../src/PlayerUI.cpp
-    ../src/Decoder.cpp
+    ../src/Renderer.cpp
 )
 
 target_include_directories(RendererTests PRIVATE
@@ -96,6 +107,7 @@ add_executable(VideoPlayerTests
     VideoPlayerTests.cpp
     ../src/Decoder.cpp
     ../src/FileOperations.cpp
+    ../src/Logger.cpp
     ../src/MenuUI.cpp
     ../src/PlayerUI.cpp
     ../src/RecentFiles.cpp

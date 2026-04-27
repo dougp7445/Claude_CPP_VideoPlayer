@@ -1,6 +1,6 @@
 #include "Decoder.h"
 #include "Constants.h"
-#include <iostream>
+#include "Logger.h"
 
 // Allocate the reusable packet and frame once here rather than per-call to
 // avoid repeated heap allocation in the decode hot path.
@@ -17,13 +17,13 @@ Decoder::~Decoder() {
 
 bool Decoder::open(const std::string& filePath) {
     if (avformat_open_input(&m_fmtCtx, filePath.c_str(), nullptr, nullptr) < 0) {
-        std::cerr << "Failed to open file: " << filePath << "\n";
+        Logger::instance().error("Failed to open file: " + filePath);
         return false;
     }
 
     // Reads enough packets to populate stream metadata (codec, resolution, etc.).
     if (avformat_find_stream_info(m_fmtCtx, nullptr) < 0) {
-        std::cerr << "Failed to find stream info\n";
+        Logger::instance().error("Failed to find stream info");
         return false;
     }
 
@@ -31,7 +31,7 @@ bool Decoder::open(const std::string& filePath) {
     m_audioStreamIdx = av_find_best_stream(m_fmtCtx, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
 
     if (m_videoStreamIdx < 0) {
-        std::cerr << "No video stream found\n";
+        Logger::instance().error("No video stream found");
         return false;
     }
 
@@ -44,7 +44,7 @@ bool Decoder::initVideoCodec() {
     const AVCodec* codec = avcodec_find_decoder(stream->codecpar->codec_id);
     
     if (!codec) {
-        std::cerr << "Unsupported video codec\n";
+        Logger::instance().error("Unsupported video codec");
         return false;
     }
 
@@ -52,7 +52,7 @@ bool Decoder::initVideoCodec() {
     avcodec_parameters_to_context(m_codecCtxVideo, stream->codecpar);
 
     if (avcodec_open2(m_codecCtxVideo, codec, nullptr) < 0) {
-        std::cerr << "Failed to open video codec\n";
+        Logger::instance().error("Failed to open video codec");
         return false;
     }
 

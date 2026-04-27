@@ -1,8 +1,8 @@
 #include "Renderer.h"
 #include "Constants.h"
+#include "Logger.h"
 #include <algorithm>
 #include <cstdio>
-#include <iostream>
 #include <vector>
 
 Renderer::Renderer() = default;
@@ -18,7 +18,7 @@ bool Renderer::initWindow(const std::string& title, int width, int height) {
     m_height = height;
 
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
-        std::cerr << "SDL_Init failed: " << SDL_GetError() << "\n";
+        Logger::instance().error(std::string("SDL_Init failed: ") + SDL_GetError());
         return false;
     }
 
@@ -39,7 +39,7 @@ bool Renderer::initWindow(const std::string& title, int width, int height) {
 
     m_window = SDL_CreateWindow(title.c_str(), winW, winH, SDL_WINDOW_RESIZABLE);
     if (!m_window) {
-        std::cerr << "SDL_CreateWindow failed: " << SDL_GetError() << "\n";
+        Logger::instance().error(std::string("SDL_CreateWindow failed: ") + SDL_GetError());
         return false;
     }
     return true;
@@ -49,7 +49,7 @@ bool Renderer::initRenderer() {
     if (!m_renderer) {
         m_renderer = SDL_CreateRenderer(m_window, nullptr);
         if (!m_renderer) {
-            std::cerr << "SDL_CreateRenderer failed: " << SDL_GetError() << "\n";
+            Logger::instance().error(std::string("SDL_CreateRenderer failed: ") + SDL_GetError());
             return false;
         }
     }
@@ -60,7 +60,7 @@ bool Renderer::initRenderer() {
             SDL_TEXTUREACCESS_STREAMING,
             m_width, m_height);
         if (!m_texture) {
-            std::cerr << "SDL_CreateTexture failed: " << SDL_GetError() << "\n";
+            Logger::instance().error(std::string("SDL_CreateTexture failed: ") + SDL_GetError());
             return false;
         }
     }
@@ -112,7 +112,7 @@ void Renderer::measureAudioLatency() {
         }
     }
 
-    std::cout << "Audio latency: " << static_cast<int>(m_audioLatencyS * 1000.0) << " ms\n";
+    Logger::instance().info("Audio latency: " + std::to_string(static_cast<int>(m_audioLatencyS * 1000.0)) + " ms");
 }
 
 bool Renderer::reloadVideo(const std::string& title, int width, int height) {
@@ -131,7 +131,7 @@ bool Renderer::reloadVideo(const std::string& title, int width, int height) {
     m_texture = SDL_CreateTexture(m_renderer, SDL_PIXELFORMAT_IYUV,
                                   SDL_TEXTUREACCESS_STREAMING, m_width, m_height);
     if (!m_texture) {
-        std::cerr << "SDL_CreateTexture failed: " << SDL_GetError() << "\n";
+        Logger::instance().error(std::string("SDL_CreateTexture failed: ") + SDL_GetError());
         return false;
     }
 
