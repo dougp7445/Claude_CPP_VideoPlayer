@@ -1,9 +1,10 @@
 #include "EncoderSettingsPanel.h"
+#include <algorithm>
 #include <cstring>
 
 namespace {
     constexpr float PANEL_W    = 400.0f;
-    constexpr float PANEL_H    = 226.0f;
+    constexpr float PANEL_H    = 262.0f;
     constexpr float TITLE_H    = 30.0f;
     constexpr float ROW_H      = 36.0f;
     constexpr float ARROW_W    = 20.0f;
@@ -14,7 +15,7 @@ namespace {
     constexpr float LABEL_X    =  10.0f;
     constexpr float BTN_W      = 100.0f;
     constexpr float BTN_H      =  26.0f;
-    constexpr float BTN_ROW_Y  = 186.0f; // y within panel
+    constexpr float BTN_ROW_Y  = 222.0f; // y within panel
 
     const char* CODEC_NAMES[]     = {"H264", "MPEG4"};
     constexpr int CODEC_COUNT     = 2;
@@ -29,6 +30,11 @@ namespace {
     const int   AUDIO_BITRATES[]  = {64, 128, 192};
     constexpr int AUDIO_BR_COUNT  = 3;
     const char* AUDIO_BR_LABELS[] = {"64 kbps", "128 kbps", "192 kbps"};
+
+    constexpr float SLIDER_X = 155.0f;
+    constexpr float SLIDER_W = 160.0f;
+    constexpr float SLIDER_H = 4.0f;
+    constexpr float THUMB_W  = 10.0f;
 }
 
 static bool hitTest(float mx, float my, const SDL_FRect& r) {
@@ -113,6 +119,43 @@ void EncoderSettingsPanel::render(SDL_Renderer* renderer, float W, float H) {
               "Audio Bitrate:", AUDIO_BR_LABELS[m_audioBrIdx],
               m_audioBrPrevRect, m_audioBrNextRect, m_mouseX, m_mouseY);
 
+    {
+        float rowTopY = py + TITLE_H + 4.0f * ROW_H;
+        float midY    = rowTopY + (ROW_H - 8.0f) * 0.5f;
+        float trackY  = rowTopY + (ROW_H - SLIDER_H) * 0.5f;
+        float thumbY  = rowTopY + (ROW_H - ARROW_H)  * 0.5f;
+
+        float t = (m_videoDuration > 0.0)
+                  ? std::min(1.0f, m_durValue / static_cast<float>(m_videoDuration))
+                  : 1.0f;
+
+        m_durSliderTrack = {px + SLIDER_X, trackY, SLIDER_W, SLIDER_H};
+        m_durSliderThumb = {px + SLIDER_X + t * SLIDER_W - THUMB_W * 0.5f, thumbY, THUMB_W, ARROW_H};
+
+        SDL_SetRenderDrawColor(renderer, 180, 180, 180, 255);
+        SDL_RenderDebugText(renderer, px + LABEL_X, midY, "Duration:");
+
+        SDL_SetRenderDrawColor(renderer, 60, 60, 60, 255);
+        SDL_RenderFillRect(renderer, &m_durSliderTrack);
+
+        SDL_FRect fill = {px + SLIDER_X, trackY, t * SLIDER_W, SLIDER_H};
+        SDL_SetRenderDrawColor(renderer, 30, 100, 180, 255);
+        SDL_RenderFillRect(renderer, &fill);
+
+        SDL_FRect hitArea = {m_durSliderTrack.x, thumbY, SLIDER_W, ARROW_H};
+        bool hovered = hitTest(m_mouseX, m_mouseY, hitArea);
+        SDL_SetRenderDrawColor(renderer, hovered ? 255 : 200, hovered ? 255 : 200, hovered ? 255 : 200, 255);
+        SDL_RenderFillRect(renderer, &m_durSliderThumb);
+
+        char valBuf[16];
+        {
+            int secs = static_cast<int>(m_durValue + 0.5f);
+            snprintf(valBuf, sizeof(valBuf), "%d:%02d", secs / 60, secs % 60);
+        }
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderDebugText(renderer, px + SLIDER_X + SLIDER_W + 5.0f, midY, valBuf);
+    }
+
     float btnY = py + BTN_ROW_Y;
     m_cancelRect = {px + 20.0f,                   btnY, BTN_W, BTN_H};
     m_exportRect = {px + PANEL_W - 20.0f - BTN_W, btnY, BTN_W, BTN_H};
@@ -166,12 +209,36 @@ EncoderSettingsPanel::Result EncoderSettingsPanel::handleMouseClick(float mx, fl
         m_audioBrIdx = (m_audioBrIdx + 1) % AUDIO_BR_COUNT;
     }
 
+    if (m_videoDuration > 0.0 && m_durSliderTrack.w > 0.0f) {
+        SDL_FRect hitArea = {m_durSliderTrack.x, m_durSliderThumb.y, SLIDER_W, m_durSliderThumb.h};
+        if (hitTest(mx, my, hitArea)) {
+            float t = std::max(0.0f, std::min(1.0f,
+                (mx - m_durSliderTrack.x) / m_durSliderTrack.w));
+            m_durValue = t * static_cast<float>(m_videoDuration);
+            m_dragging = true;
+        }
+    }
+
     return Result::None;
 }
 
 void EncoderSettingsPanel::handleMouseMotion(float mx, float my) {
     m_mouseX = mx;
     m_mouseY = my;
+    if (m_dragging && m_videoDuration > 0.0 && m_durSliderTrack.w > 0.0f) {
+        float t = std::max(0.0f, std::min(1.0f,
+            (mx - m_durSliderTrack.x) / m_durSliderTrack.w));
+        m_durValue = t * static_cast<float>(m_videoDuration);
+    }
+}
+
+void EncoderSettingsPanel::handleMouseButtonUp(float /*mx*/, float /*my*/) {
+    m_dragging = false;
+}
+
+void EncoderSettingsPanel::setVideoDuration(double d) {
+    m_videoDuration = d;
+    m_durValue      = static_cast<float>(d); // default to full
 }
 
 EncoderSettings EncoderSettingsPanel::getSettings() const {
@@ -184,5 +251,8 @@ EncoderSettings EncoderSettingsPanel::getSettings() const {
         : EncoderSettings::OutputFormat::TS;
     s.videoBitRateKbps = VIDEO_BITRATES[m_videoBrIdx];
     s.audioBitRateKbps = AUDIO_BITRATES[m_audioBrIdx];
+    bool isFull = m_videoDuration <= 0.0 ||
+                  m_durValue >= static_cast<float>(m_videoDuration) - 0.5f;
+    s.exportDuration = isFull ? 0.0f : m_durValue;
     return s;
 }

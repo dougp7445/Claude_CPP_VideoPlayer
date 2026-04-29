@@ -11,6 +11,8 @@ public:
     void   render(SDL_Renderer* renderer, float W, float H);
     Result handleMouseClick(float mx, float my);
     void   handleMouseMotion(float mx, float my);
+    void   handleMouseButtonUp(float mx, float my);
+    void   setVideoDuration(double d);
 
     EncoderSettings getSettings() const;
 
@@ -19,6 +21,10 @@ private:
     int   m_fmtIdx     = 0; // 0=MP4,  1=TS
     int   m_videoBrIdx = 2; // index into VIDEO_BITRATES[] — default 2000 kbps
     int   m_audioBrIdx = 1; // index into AUDIO_BITRATES[] — default 128 kbps
+
+    double m_videoDuration = 0.0;
+    float  m_durValue      = 0.0f;
+    bool   m_dragging      = false;
 
     float m_mouseX = 0.0f;
     float m_mouseY = 0.0f;
@@ -31,6 +37,8 @@ private:
     SDL_FRect m_videoBrNextRect = {};
     SDL_FRect m_audioBrPrevRect = {};
     SDL_FRect m_audioBrNextRect = {};
+    SDL_FRect m_durSliderTrack  = {};
+    SDL_FRect m_durSliderThumb  = {};
     SDL_FRect m_cancelRect      = {};
     SDL_FRect m_exportRect      = {};
 };

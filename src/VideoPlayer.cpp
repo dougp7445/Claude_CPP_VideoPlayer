@@ -1,7 +1,7 @@
 #include "VideoPlayer.h"
 #include "Constants.h"
 #include "Encoder.h"
-#include "EncoderSettingsPanel.h"
+#include "ExportSettingsDialog.h"
 #include "FileOperations.h"
 #include "Logger.h"
 #include <algorithm>
@@ -56,6 +56,7 @@ void VideoPlayer::renderLoop() {
     bool wasInDialog = false;
     while (!m_quit) {
         bool inDialog = m_showExportDialog.load();
+        if (inDialog) { m_renderer.onActivity(); }
         PlayerEvent ev = inDialog ? PlayerEvent::None : m_renderer.pollEvents();
         if (!inDialog && wasInDialog) { reclock = true; }
         wasInDialog = inDialog;
@@ -348,52 +349,12 @@ void VideoPlayer::run(std::function<std::string()> filePicker) {
 
 
 void VideoPlayer::runExportDialog() {
-    constexpr int DLG_W = 400, DLG_H = 226;
-    SDL_Window*   dlgWin = SDL_CreateWindow("Export Settings", DLG_W, DLG_H, 0);
-    SDL_Renderer* dlgRen = dlgWin ? SDL_CreateRenderer(dlgWin, nullptr) : nullptr;
-    SDL_WindowID  dlgID  = dlgWin ? SDL_GetWindowID(dlgWin) : 0;
-    SDL_Window*   mainWin = SDL_GetRenderWindow(m_renderer.getSDLRenderer());
-    SDL_WindowID  mainID  = mainWin ? SDL_GetWindowID(mainWin) : 0;
-
-    EncoderSettingsPanel panel;
-    bool done = false;
-
-    while (!m_quit && !done) {
-        SDL_Event ev;
-        while (!done && SDL_PollEvent(&ev)) {
-            if (ev.type == SDL_EVENT_QUIT) { m_quit = true; done = true; }
-            if (ev.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
-                if (ev.window.windowID == dlgID)  { done = true; }
-                if (ev.window.windowID == mainID) { m_quit = true; done = true; }
-            }
-            if (ev.type == SDL_EVENT_MOUSE_MOTION && ev.motion.windowID == dlgID) {
-                panel.handleMouseMotion(ev.motion.x, ev.motion.y);
-            }
-            if (ev.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
-                ev.button.windowID == dlgID &&
-                ev.button.button == SDL_BUTTON_LEFT) {
-                auto r = panel.handleMouseClick(ev.button.x, ev.button.y);
-                if (r == EncoderSettingsPanel::Result::Export) {
-                    m_exportSettings = panel.getSettings();
-                    m_requestExport  = true;
-                    m_quit           = true;
-                    done             = true;
-                } else if (r == EncoderSettingsPanel::Result::Cancel) {
-                    done = true;
-                }
-            }
-        }
-        if (!done && dlgRen) {
-            SDL_SetRenderDrawColor(dlgRen, 0, 0, 0, 255);
-            SDL_RenderClear(dlgRen);
-            panel.render(dlgRen, static_cast<float>(DLG_W), static_cast<float>(DLG_H));
-            SDL_RenderPresent(dlgRen);
-        }
-        if (!done) { SDL_Delay(16); }
+    EncoderSettings settings;
+    if (showExportDialog(m_renderer.getSDLRenderer(), m_decoder.duration(), m_quit, settings)) {
+        m_exportSettings = settings;
+        m_requestExport  = true;
+        m_quit           = true;
     }
-
-    if (dlgRen) { SDL_DestroyRenderer(dlgRen); }
-    if (dlgWin) { SDL_DestroyWindow(dlgWin); }
     m_showExportDialog = false;
 }
 
@@ -419,12 +380,19 @@ void VideoPlayer::runEncoding(const std::string& savePath, const EncoderSettings
         return;
     }
 
-    double duration = m_decoder.duration();
+    double duration    = m_decoder.duration();
+    double exportLimit = (settings.exportDuration > 0.0f)
+                         ? static_cast<double>(settings.exportDuration) : duration;
     DecodedFrame frame;
     while (!cancel && m_decoder.readFrame(frame)) {
-        if (duration > 0.0) {
-            float p = static_cast<float>(frame.pts / duration);
+        if (exportLimit > 0.0) {
+            float p = static_cast<float>(frame.pts / exportLimit);
             progress = p < 1.0f ? p : 1.0f;
+        }
+        if (settings.exportDuration > 0.0f && frame.pts >= exportLimit) {
+            av_frame_free(&frame.videoFrame);
+            av_frame_free(&frame.audioFrame);
+            break;
         }
         if (frame.videoFrame) {
             encoder.writeVideoFrame(frame.videoFrame);

@@ -54,6 +54,8 @@ public:
     // Uses SDL_PeepEvents (no pump) — safe to call from non-main threads.
     PlayerEvent pollEvents();
 
+    void onActivity() { m_ui.onActivity(); }
+
     SDL_Renderer* getSDLRenderer() const { return m_renderer; }
     void getWindowSize(int& w, int& h) const { SDL_GetWindowSize(m_window, &w, &h); }
 

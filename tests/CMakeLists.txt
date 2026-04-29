@@ -135,8 +135,10 @@ gtest_discover_tests(RendererTests)
 add_executable(VideoPlayerTests
     VideoPlayerTests.cpp
     ../src/Decoder.cpp
+    ../src/DialogWindow.cpp
     ../src/Encoder.cpp
     ../src/EncoderSettingsPanel.cpp
+    ../src/ExportSettingsDialog.cpp
     ../src/FileOperations.cpp
     ../src/Logger.cpp
     ../src/MenuUI.cpp
