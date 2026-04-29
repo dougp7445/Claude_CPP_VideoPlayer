@@ -32,6 +32,10 @@ public:
     int videoHeight() const { return m_codecCtxVideo ? m_codecCtxVideo->height : 0; }
     double duration() const;
 
+    AVRational videoTimeBase() const;
+    AVRational audioTimeBase() const;
+    bool hasAudio() const { return m_audioStreamIdx >= 0; }
+
 private:
     AVFormatContext* m_fmtCtx        = nullptr;
     AVCodecContext*  m_codecCtxVideo = nullptr;

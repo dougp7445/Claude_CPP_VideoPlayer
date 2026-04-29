@@ -210,6 +210,16 @@ bool Decoder::seek(double seconds) {
     return true;
 }
 
+AVRational Decoder::videoTimeBase() const {
+    if (!m_fmtCtx || m_videoStreamIdx < 0) { return {0, 1}; }
+    return m_fmtCtx->streams[m_videoStreamIdx]->time_base;
+}
+
+AVRational Decoder::audioTimeBase() const {
+    if (!m_fmtCtx || m_audioStreamIdx < 0) { return {0, 1}; }
+    return m_fmtCtx->streams[m_audioStreamIdx]->time_base;
+}
+
 double Decoder::duration() const {
     if (!m_fmtCtx) {
         return 0.0;

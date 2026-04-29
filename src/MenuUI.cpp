@@ -52,10 +52,10 @@ void MenuUI::render(SDL_Renderer* renderer, float W) {
 
     if (!m_menuOpen) { return; }
 
-    // ── Dropdown panel (two fixed rows: Open File + Recent Files) ──
+    // ── Dropdown panel (three fixed rows: Open File, Recent Files, Export Video) ──
     float dx = MENU_PAD;
     float dy = MENU_H;
-    float panelH = DROP_ITEM_H * 2.0f;
+    float panelH = DROP_ITEM_H * 3.0f;
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(renderer, 28, 28, 28, 230);
@@ -109,6 +109,21 @@ void MenuUI::render(SDL_Renderer* renderer, float W) {
     SDL_RenderDebugText(renderer, dx + DROP_W - 8.0f - 8.0f,
                         rfY + (DROP_ITEM_H - 8.0f) * 0.5f, ">");
 
+    // ── "Export Video..." row ──
+    float evY = rfY + DROP_ITEM_H;
+    m_exportVideoDropRect = {dx, evY, DROP_W, DROP_ITEM_H};
+    bool exportHovered = (m_mouseX >= dx && m_mouseX < dx + DROP_W
+                       && m_mouseY >= evY && m_mouseY < evY + DROP_ITEM_H);
+    if (exportHovered) {
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 35);
+        SDL_RenderFillRect(renderer, &m_exportVideoDropRect);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+    }
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderDebugText(renderer, dx + 8.0f,
+                        evY + (DROP_ITEM_H - 8.0f) * 0.5f, "Export Video...");
+
     if (!m_subMenuVisible) { return; }
 
     // ── Submenu panel ──
@@ -158,6 +173,10 @@ PlayerEvent MenuUI::handleMouseClick(float mx, float my, bool& consumed) {
         if (hit(mx, my, m_openFileDropRect)) {
             m_pendingPath.clear();
             return PlayerEvent::OpenFile;
+        }
+
+        if (hit(mx, my, m_exportVideoDropRect)) {
+            return PlayerEvent::ExportVideo;
         }
 
         if (m_subMenuVisible) {

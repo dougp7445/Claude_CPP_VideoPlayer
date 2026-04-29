@@ -1,9 +1,13 @@
 #include "VideoPlayer.h"
 #include "Constants.h"
+#include "Encoder.h"
+#include "EncoderSettingsPanel.h"
 #include "FileOperations.h"
+#include "Logger.h"
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
-#include <iostream>
+#include <filesystem>
 #include <string>
 #include <thread>
 
@@ -49,8 +53,12 @@ void VideoPlayer::renderLoop() {
     float    lastSpeed  = 1.0f;
     double   target     = 0.0;
 
+    bool wasInDialog = false;
     while (!m_quit) {
-        PlayerEvent ev = m_renderer.pollEvents();
+        bool inDialog = m_showExportDialog.load();
+        PlayerEvent ev = inDialog ? PlayerEvent::None : m_renderer.pollEvents();
+        if (!inDialog && wasInDialog) { reclock = true; }
+        wasInDialog = inDialog;
 
         if (ev == PlayerEvent::Quit) {
             break;
@@ -59,6 +67,10 @@ void VideoPlayer::renderLoop() {
         if (ev == PlayerEvent::OpenFile) {
             m_requestOpenFile = true;
             break;
+        }
+
+        if (ev == PlayerEvent::ExportVideo && !m_showExportDialog) {
+            m_showExportDialog = true;
         }
 
         switch (ev) {
@@ -174,17 +186,141 @@ void VideoPlayer::renderLoop() {
 
 void VideoPlayer::run(std::function<std::string()> filePicker) {
     while (true) {
-        m_quit            = false;
-        m_requestOpenFile = false;
+        m_quit             = false;
+        m_requestOpenFile  = false;
+        m_showExportDialog = false;
 
         std::thread rt([this]() { renderLoop(); });
 
         while (!m_quit) {
             SDL_PumpEvents();
+            if (m_showExportDialog) { runExportDialog(); }
             SDL_Delay(1);
         }
 
         rt.join();
+
+        if (m_requestExport) {
+            m_requestExport = false;
+            {
+                std::string ext = (m_exportSettings.outputFormat == EncoderSettings::OutputFormat::TS)
+                    ? "ts" : "mp4";
+                std::string savePath = saveFileDialog(ext);
+                if (!savePath.empty()) {
+                    std::atomic<bool>  encodingDone{false};
+                    std::atomic<bool>  cancelEncoding{false};
+                    std::atomic<float> encodingProgress{0.0f};
+                    std::thread encThread([&]() {
+                        runEncoding(savePath, m_exportSettings, cancelEncoding, encodingProgress);
+                        encodingDone = true;
+                    });
+
+                    constexpr int   PROG_WIN_W = 360;
+                    constexpr int   PROG_WIN_H = 150;
+                    constexpr float BAR_W      = 300.0f;
+                    constexpr float BAR_H      =  16.0f;
+                    constexpr float BTN_W      = 100.0f;
+                    constexpr float BTN_H      =  26.0f;
+                    constexpr float fW         = static_cast<float>(PROG_WIN_W);
+                    constexpr float fH         = static_cast<float>(PROG_WIN_H);
+                    constexpr float barX       = (fW - BAR_W) * 0.5f;
+                    constexpr float barY       = fH * 0.5f - 8.0f;
+                    constexpr float bx         = (fW - BTN_W) * 0.5f;
+                    constexpr float by         = fH * 0.5f + 26.0f;
+                    constexpr const char* MSG  = "Exporting... Please wait.";
+                    constexpr float MSG_W      = 25.0f * 8.0f;
+
+                    SDL_Window*   progWin      = SDL_CreateWindow("Exporting", PROG_WIN_W, PROG_WIN_H, 0);
+                    SDL_Renderer* progRenderer = progWin ? SDL_CreateRenderer(progWin, nullptr) : nullptr;
+                    SDL_WindowID  progWinID    = progWin ? SDL_GetWindowID(progWin) : 0;
+                    float mouseX = 0.0f, mouseY = 0.0f;
+                    char  pctBuf[8] = "0%";
+
+                    while (!encodingDone) {
+                        SDL_Event ev;
+                        while (SDL_PollEvent(&ev)) {
+                            if (ev.type == SDL_EVENT_MOUSE_MOTION &&
+                                ev.motion.windowID == progWinID) {
+                                mouseX = ev.motion.x;
+                                mouseY = ev.motion.y;
+                            }
+                            if (ev.type == SDL_EVENT_KEY_DOWN &&
+                                ev.key.windowID == progWinID &&
+                                ev.key.key == SDLK_ESCAPE) {
+                                cancelEncoding = true;
+                            }
+                            if (ev.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
+                                ev.button.windowID == progWinID &&
+                                ev.button.button == SDL_BUTTON_LEFT) {
+                                if (ev.button.x >= bx && ev.button.x < bx + BTN_W &&
+                                    ev.button.y >= by && ev.button.y < by + BTN_H) {
+                                    cancelEncoding = true;
+                                }
+                            }
+                        }
+
+                        if (progRenderer) {
+                            float progress = encodingProgress.load();
+                            int   pct      = static_cast<int>(progress * 100.0f);
+                            snprintf(pctBuf, sizeof(pctBuf), "%d%%", pct);
+
+                            SDL_SetRenderDrawColor(progRenderer, 0, 0, 0, 255);
+                            SDL_RenderClear(progRenderer);
+
+                            SDL_SetRenderDrawColor(progRenderer, 255, 255, 255, 255);
+                            SDL_RenderDebugText(progRenderer,
+                                (fW - MSG_W) * 0.5f, fH * 0.5f - 34.0f, MSG);
+
+                            SDL_FRect bgBar   = {barX, barY, BAR_W, BAR_H};
+                            SDL_FRect fillBar = {barX, barY, BAR_W * progress, BAR_H};
+                            SDL_SetRenderDrawBlendMode(progRenderer, SDL_BLENDMODE_BLEND);
+                            SDL_SetRenderDrawColor(progRenderer, 50, 50, 50, 255);
+                            SDL_RenderFillRect(progRenderer, &bgBar);
+                            SDL_SetRenderDrawColor(progRenderer, 30, 100, 180, 255);
+                            SDL_RenderFillRect(progRenderer, &fillBar);
+                            SDL_SetRenderDrawColor(progRenderer, 120, 120, 120, 200);
+                            SDL_RenderRect(progRenderer, &bgBar);
+                            SDL_SetRenderDrawBlendMode(progRenderer, SDL_BLENDMODE_NONE);
+
+                            size_t pctLen = strlen(pctBuf);
+                            SDL_SetRenderDrawColor(progRenderer, 255, 255, 255, 255);
+                            SDL_RenderDebugText(progRenderer,
+                                barX + (BAR_W - static_cast<float>(pctLen) * 8.0f) * 0.5f,
+                                barY + (BAR_H - 8.0f) * 0.5f, pctBuf);
+
+                            bool hovered  = mouseX >= bx && mouseX < bx + BTN_W &&
+                                            mouseY >= by && mouseY < by + BTN_H;
+                            SDL_FRect btn = {bx, by, BTN_W, BTN_H};
+                            SDL_SetRenderDrawBlendMode(progRenderer, SDL_BLENDMODE_BLEND);
+                            SDL_SetRenderDrawColor(progRenderer, 60, 60, 60, hovered ? 220 : 160);
+                            SDL_RenderFillRect(progRenderer, &btn);
+                            SDL_SetRenderDrawColor(progRenderer, 200, 200, 200, 200);
+                            SDL_RenderRect(progRenderer, &btn);
+                            SDL_SetRenderDrawBlendMode(progRenderer, SDL_BLENDMODE_NONE);
+                            SDL_SetRenderDrawColor(progRenderer, 255, 255, 255, 255);
+                            SDL_RenderDebugText(progRenderer,
+                                bx + (BTN_W - 6.0f * 8.0f) * 0.5f,
+                                by + (BTN_H - 8.0f) * 0.5f, "Cancel");
+
+                            SDL_RenderPresent(progRenderer);
+                        }
+                        SDL_Delay(16);
+                    }
+
+                    if (progRenderer) { SDL_DestroyRenderer(progRenderer); }
+                    if (progWin)      { SDL_DestroyWindow(progWin); }
+
+                    encThread.join();
+
+                    if (cancelEncoding) {
+                        std::filesystem::remove(savePath);
+                        Logger::instance().info("VideoPlayer: export cancelled, partial file removed");
+                    }
+                }
+            }
+            m_decoder.seek(0.0);
+            continue;
+        }
 
         if (!m_requestOpenFile) { break; }
 
@@ -207,5 +343,103 @@ void VideoPlayer::run(std::function<std::string()> filePicker) {
         if (!m_renderer.reloadVideo("VideoPlayer - " + newPath,
                                     m_decoder.videoWidth(),
                                     m_decoder.videoHeight())) break;
+    }
+}
+
+
+void VideoPlayer::runExportDialog() {
+    constexpr int DLG_W = 400, DLG_H = 226;
+    SDL_Window*   dlgWin = SDL_CreateWindow("Export Settings", DLG_W, DLG_H, 0);
+    SDL_Renderer* dlgRen = dlgWin ? SDL_CreateRenderer(dlgWin, nullptr) : nullptr;
+    SDL_WindowID  dlgID  = dlgWin ? SDL_GetWindowID(dlgWin) : 0;
+    SDL_Window*   mainWin = SDL_GetRenderWindow(m_renderer.getSDLRenderer());
+    SDL_WindowID  mainID  = mainWin ? SDL_GetWindowID(mainWin) : 0;
+
+    EncoderSettingsPanel panel;
+    bool done = false;
+
+    while (!m_quit && !done) {
+        SDL_Event ev;
+        while (!done && SDL_PollEvent(&ev)) {
+            if (ev.type == SDL_EVENT_QUIT) { m_quit = true; done = true; }
+            if (ev.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
+                if (ev.window.windowID == dlgID)  { done = true; }
+                if (ev.window.windowID == mainID) { m_quit = true; done = true; }
+            }
+            if (ev.type == SDL_EVENT_MOUSE_MOTION && ev.motion.windowID == dlgID) {
+                panel.handleMouseMotion(ev.motion.x, ev.motion.y);
+            }
+            if (ev.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
+                ev.button.windowID == dlgID &&
+                ev.button.button == SDL_BUTTON_LEFT) {
+                auto r = panel.handleMouseClick(ev.button.x, ev.button.y);
+                if (r == EncoderSettingsPanel::Result::Export) {
+                    m_exportSettings = panel.getSettings();
+                    m_requestExport  = true;
+                    m_quit           = true;
+                    done             = true;
+                } else if (r == EncoderSettingsPanel::Result::Cancel) {
+                    done = true;
+                }
+            }
+        }
+        if (!done && dlgRen) {
+            SDL_SetRenderDrawColor(dlgRen, 0, 0, 0, 255);
+            SDL_RenderClear(dlgRen);
+            panel.render(dlgRen, static_cast<float>(DLG_W), static_cast<float>(DLG_H));
+            SDL_RenderPresent(dlgRen);
+        }
+        if (!done) { SDL_Delay(16); }
+    }
+
+    if (dlgRen) { SDL_DestroyRenderer(dlgRen); }
+    if (dlgWin) { SDL_DestroyWindow(dlgWin); }
+    m_showExportDialog = false;
+}
+
+void VideoPlayer::runEncoding(const std::string& savePath, const EncoderSettings& settings,
+                              std::atomic<bool>& cancel, std::atomic<float>& progress) {
+    if (!m_decoder.seek(0.0)) {
+        Logger::instance().error("VideoPlayer: failed to seek to start for encoding");
+        return;
+    }
+
+    int  sampleRate = m_decoder.hasAudio() ? 44100 : 0;
+    int  channels   = m_decoder.hasAudio() ? 2 : 0;
+    bool preferH264 = settings.videoCodec == EncoderSettings::VideoCodec::H264;
+
+    Encoder encoder;
+    if (!encoder.open(savePath,
+                      m_decoder.videoWidth(), m_decoder.videoHeight(),
+                      m_decoder.videoTimeBase(),
+                      sampleRate, channels,
+                      settings.videoBitRateKbps, settings.audioBitRateKbps,
+                      preferH264)) {
+        Logger::instance().error("VideoPlayer: failed to open encoder for " + savePath);
+        return;
+    }
+
+    double duration = m_decoder.duration();
+    DecodedFrame frame;
+    while (!cancel && m_decoder.readFrame(frame)) {
+        if (duration > 0.0) {
+            float p = static_cast<float>(frame.pts / duration);
+            progress = p < 1.0f ? p : 1.0f;
+        }
+        if (frame.videoFrame) {
+            encoder.writeVideoFrame(frame.videoFrame);
+            av_frame_free(&frame.videoFrame);
+        }
+        if (frame.audioFrame) {
+            encoder.writeAudioFrame(frame.audioFrame);
+            av_frame_free(&frame.audioFrame);
+        }
+    }
+
+    encoder.close();
+
+    if (!cancel) {
+        progress = 1.0f;
+        Logger::instance().info("VideoPlayer: export complete — " + savePath);
     }
 }

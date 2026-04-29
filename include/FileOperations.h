@@ -11,4 +11,8 @@ std::string executableDir();
 // Returns the selected path, or an empty string if canceled.
 std::string openFileDialog();
 
+// Shows a native OS file-save dialog. extension must be "mp4" or "ts".
+// Returns the chosen path with the correct extension, or an empty string if canceled.
+std::string saveFileDialog(const std::string& extension = "mp4");
+
 #endif // FILE_OPERATIONS_H

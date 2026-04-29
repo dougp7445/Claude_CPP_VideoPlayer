@@ -18,6 +18,35 @@ target_link_libraries(LoggerTests PRIVATE gtest_main)
 gtest_discover_tests(LoggerTests)
 
 
+# Encoder Tests
+add_executable(EncoderTests
+    EncoderTests.cpp
+    ../src/Encoder.cpp
+    ../src/Logger.cpp
+)
+
+target_include_directories(EncoderTests PRIVATE
+    ../include
+    "${FFMPEG_DIR}/include"
+)
+
+target_link_libraries(EncoderTests PRIVATE
+    gtest_main
+    "${FFMPEG_DIR}/lib/avcodec.lib"
+    "${FFMPEG_DIR}/lib/avformat.lib"
+    "${FFMPEG_DIR}/lib/avutil.lib"
+    "${FFMPEG_DIR}/lib/swresample.lib"
+)
+
+add_custom_command(TARGET EncoderTests POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${FFMPEG_DLLS}
+        $<TARGET_FILE_DIR:EncoderTests>
+)
+
+gtest_discover_tests(EncoderTests)
+
+
 # Decoder Tests
 add_executable(DecoderTests DecoderTests.cpp ../src/Decoder.cpp ../src/Logger.cpp)
 
@@ -106,6 +135,8 @@ gtest_discover_tests(RendererTests)
 add_executable(VideoPlayerTests
     VideoPlayerTests.cpp
     ../src/Decoder.cpp
+    ../src/Encoder.cpp
+    ../src/EncoderSettingsPanel.cpp
     ../src/FileOperations.cpp
     ../src/Logger.cpp
     ../src/MenuUI.cpp

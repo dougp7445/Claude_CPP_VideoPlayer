@@ -27,8 +27,9 @@ private:
     float m_mouseX   = 0.0f;
     float m_mouseY   = 0.0f;
     SDL_FRect m_fileMenuRect      = {};
-    SDL_FRect m_openFileDropRect  = {};
+    SDL_FRect m_openFileDropRect   = {};
     SDL_FRect m_recentFilesRowRect = {};
+    SDL_FRect m_exportVideoDropRect = {};
     bool      m_subMenuVisible    = false;
 
     std::vector<std::string> m_recentFiles;

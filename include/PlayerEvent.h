@@ -13,6 +13,7 @@ enum class PlayerEvent {
     ToggleFullscreen,
     SpeedChange,
     OpenFile,
+    ExportVideo,
 };
 
 #endif // PLAYER_EVENT_H
