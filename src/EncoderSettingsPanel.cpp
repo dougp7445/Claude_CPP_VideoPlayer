@@ -15,7 +15,7 @@ namespace {
     constexpr float LABEL_X    =  10.0f;
     constexpr float BTN_W      = 100.0f;
     constexpr float BTN_H      =  26.0f;
-    constexpr float BTN_ROW_Y  = 222.0f; // y within panel
+    constexpr float BTN_ROW_Y  = 222.0f;
 
     const char* CODEC_NAMES[]     = {"H264", "MPEG4"};
     constexpr int CODEC_COUNT     = 2;
@@ -31,10 +31,11 @@ namespace {
     constexpr int AUDIO_BR_COUNT  = 3;
     const char* AUDIO_BR_LABELS[] = {"64 kbps", "128 kbps", "192 kbps"};
 
-    constexpr float SLIDER_X = 155.0f;
-    constexpr float SLIDER_W = 160.0f;
-    constexpr float SLIDER_H = 4.0f;
-    constexpr float THUMB_W  = 10.0f;
+    // Range slider geometry
+    constexpr float SLIDER_H       =  4.0f;
+    constexpr float THUMB_W        = 10.0f;
+    constexpr float RNG_TRACK_X    = 120.0f;
+    constexpr float RNG_TRACK_W    = 170.0f;
 }
 
 static bool hitTest(float mx, float my, const SDL_FRect& r) {
@@ -119,41 +120,62 @@ void EncoderSettingsPanel::render(SDL_Renderer* renderer, float W, float H) {
               "Audio Bitrate:", AUDIO_BR_LABELS[m_audioBrIdx],
               m_audioBrPrevRect, m_audioBrNextRect, m_mouseX, m_mouseY);
 
+    // Combined range slider (start + end)
     {
         float rowTopY = py + TITLE_H + 4.0f * ROW_H;
         float midY    = rowTopY + (ROW_H - 8.0f) * 0.5f;
         float trackY  = rowTopY + (ROW_H - SLIDER_H) * 0.5f;
         float thumbY  = rowTopY + (ROW_H - ARROW_H)  * 0.5f;
 
-        float t = (m_videoDuration > 0.0)
-                  ? std::min(1.0f, m_durValue / static_cast<float>(m_videoDuration))
-                  : 1.0f;
+        float dur    = static_cast<float>(m_videoDuration);
+        float startT = (dur > 0.0f) ? std::min(1.0f, m_startValue / dur) : 0.0f;
+        float endT   = (dur > 0.0f) ? std::min(1.0f, m_endValue   / dur) : 1.0f;
 
-        m_durSliderTrack = {px + SLIDER_X, trackY, SLIDER_W, SLIDER_H};
-        m_durSliderThumb = {px + SLIDER_X + t * SLIDER_W - THUMB_W * 0.5f, thumbY, THUMB_W, ARROW_H};
+        m_rangeTrack = {px + RNG_TRACK_X,                                    trackY, RNG_TRACK_W, SLIDER_H};
+        m_startThumb = {px + RNG_TRACK_X + startT * RNG_TRACK_W - THUMB_W * 0.5f, thumbY, THUMB_W, ARROW_H};
+        m_endThumb   = {px + RNG_TRACK_X + endT   * RNG_TRACK_W - THUMB_W * 0.5f, thumbY, THUMB_W, ARROW_H};
 
         SDL_SetRenderDrawColor(renderer, 180, 180, 180, 255);
-        SDL_RenderDebugText(renderer, px + LABEL_X, midY, "Duration:");
+        SDL_RenderDebugText(renderer, px + LABEL_X, midY, "Range:");
 
+        // Track background
         SDL_SetRenderDrawColor(renderer, 60, 60, 60, 255);
-        SDL_RenderFillRect(renderer, &m_durSliderTrack);
+        SDL_RenderFillRect(renderer, &m_rangeTrack);
 
-        SDL_FRect fill = {px + SLIDER_X, trackY, t * SLIDER_W, SLIDER_H};
+        // Filled region between thumbs
+        SDL_FRect fill = {
+            px + RNG_TRACK_X + startT * RNG_TRACK_W,
+            trackY,
+            (endT - startT) * RNG_TRACK_W,
+            SLIDER_H
+        };
         SDL_SetRenderDrawColor(renderer, 30, 100, 180, 255);
         SDL_RenderFillRect(renderer, &fill);
 
-        SDL_FRect hitArea = {m_durSliderTrack.x, thumbY, SLIDER_W, ARROW_H};
-        bool hovered = hitTest(m_mouseX, m_mouseY, hitArea);
-        SDL_SetRenderDrawColor(renderer, hovered ? 255 : 200, hovered ? 255 : 200, hovered ? 255 : 200, 255);
-        SDL_RenderFillRect(renderer, &m_durSliderThumb);
+        // Thumbs
+        bool startHov = hitTest(m_mouseX, m_mouseY, m_startThumb);
+        bool endHov   = hitTest(m_mouseX, m_mouseY, m_endThumb);
+        uint8_t sc = startHov ? 255 : 200;
+        uint8_t ec = endHov   ? 255 : 200;
+        SDL_SetRenderDrawColor(renderer, sc, sc, sc, 255);
+        SDL_RenderFillRect(renderer, &m_startThumb);
+        SDL_SetRenderDrawColor(renderer, ec, ec, ec, 255);
+        SDL_RenderFillRect(renderer, &m_endThumb);
 
-        char valBuf[16];
+        // Time labels: start right-aligned before track, end left-aligned after track
+        char startBuf[8], endBuf[8];
         {
-            int secs = static_cast<int>(m_durValue + 0.5f);
-            snprintf(valBuf, sizeof(valBuf), "%d:%02d", secs / 60, secs % 60);
+            int s = static_cast<int>(m_startValue + 0.5f);
+            snprintf(startBuf, sizeof(startBuf), "%d:%02d", s / 60, s % 60);
+        }
+        {
+            int s = static_cast<int>(m_endValue + 0.5f);
+            snprintf(endBuf, sizeof(endBuf), "%d:%02d", s / 60, s % 60);
         }
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-        SDL_RenderDebugText(renderer, px + SLIDER_X + SLIDER_W + 5.0f, midY, valBuf);
+        float startTextX = px + RNG_TRACK_X - static_cast<float>(strlen(startBuf)) * 8.0f - 4.0f;
+        SDL_RenderDebugText(renderer, startTextX, midY, startBuf);
+        SDL_RenderDebugText(renderer, px + RNG_TRACK_X + RNG_TRACK_W + 4.0f, midY, endBuf);
     }
 
     float btnY = py + BTN_ROW_Y;
@@ -209,13 +231,20 @@ EncoderSettingsPanel::Result EncoderSettingsPanel::handleMouseClick(float mx, fl
         m_audioBrIdx = (m_audioBrIdx + 1) % AUDIO_BR_COUNT;
     }
 
-    if (m_videoDuration > 0.0 && m_durSliderTrack.w > 0.0f) {
-        SDL_FRect hitArea = {m_durSliderTrack.x, m_durSliderThumb.y, SLIDER_W, m_durSliderThumb.h};
+    if (m_videoDuration > 0.0 && m_rangeTrack.w > 0.0f) {
+        SDL_FRect hitArea = {m_rangeTrack.x, m_startThumb.y, m_rangeTrack.w, m_startThumb.h};
         if (hitTest(mx, my, hitArea)) {
-            float t = std::max(0.0f, std::min(1.0f,
-                (mx - m_durSliderTrack.x) / m_durSliderTrack.w));
-            m_durValue = t * static_cast<float>(m_videoDuration);
-            m_dragging = true;
+            float t      = std::max(0.0f, std::min(1.0f, (mx - m_rangeTrack.x) / m_rangeTrack.w));
+            float newVal = t * static_cast<float>(m_videoDuration);
+            float startCx = m_startThumb.x + m_startThumb.w * 0.5f;
+            float endCx   = m_endThumb.x   + m_endThumb.w   * 0.5f;
+            if (std::abs(mx - startCx) <= std::abs(mx - endCx)) {
+                m_startValue    = std::min(newVal, m_endValue);
+                m_draggingStart = true;
+            } else {
+                m_endValue    = std::max(newVal, m_startValue);
+                m_draggingEnd = true;
+            }
         }
     }
 
@@ -225,20 +254,25 @@ EncoderSettingsPanel::Result EncoderSettingsPanel::handleMouseClick(float mx, fl
 void EncoderSettingsPanel::handleMouseMotion(float mx, float my) {
     m_mouseX = mx;
     m_mouseY = my;
-    if (m_dragging && m_videoDuration > 0.0 && m_durSliderTrack.w > 0.0f) {
-        float t = std::max(0.0f, std::min(1.0f,
-            (mx - m_durSliderTrack.x) / m_durSliderTrack.w));
-        m_durValue = t * static_cast<float>(m_videoDuration);
+    if (m_draggingStart && m_videoDuration > 0.0 && m_rangeTrack.w > 0.0f) {
+        float t      = std::max(0.0f, std::min(1.0f, (mx - m_rangeTrack.x) / m_rangeTrack.w));
+        m_startValue = std::min(t * static_cast<float>(m_videoDuration), m_endValue);
+    }
+    if (m_draggingEnd && m_videoDuration > 0.0 && m_rangeTrack.w > 0.0f) {
+        float t    = std::max(0.0f, std::min(1.0f, (mx - m_rangeTrack.x) / m_rangeTrack.w));
+        m_endValue = std::max(t * static_cast<float>(m_videoDuration), m_startValue);
     }
 }
 
 void EncoderSettingsPanel::handleMouseButtonUp(float /*mx*/, float /*my*/) {
-    m_dragging = false;
+    m_draggingStart = false;
+    m_draggingEnd   = false;
 }
 
 void EncoderSettingsPanel::setVideoDuration(double d) {
     m_videoDuration = d;
-    m_durValue      = static_cast<float>(d); // default to full
+    m_startValue    = 0.0f;
+    m_endValue      = static_cast<float>(d);
 }
 
 EncoderSettings EncoderSettingsPanel::getSettings() const {
@@ -251,8 +285,9 @@ EncoderSettings EncoderSettingsPanel::getSettings() const {
         : EncoderSettings::OutputFormat::TS;
     s.videoBitRateKbps = VIDEO_BITRATES[m_videoBrIdx];
     s.audioBitRateKbps = AUDIO_BITRATES[m_audioBrIdx];
-    bool isFull = m_videoDuration <= 0.0 ||
-                  m_durValue >= static_cast<float>(m_videoDuration) - 0.5f;
-    s.exportDuration = isFull ? 0.0f : m_durValue;
+    s.exportStartTime  = m_startValue;
+    bool isFull        = m_videoDuration <= 0.0 ||
+                         m_endValue >= static_cast<float>(m_videoDuration) - 0.5f;
+    s.exportDuration   = isFull ? 0.0f : (m_endValue - m_startValue);
     return s;
 }

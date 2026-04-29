@@ -9,7 +9,8 @@ struct EncoderSettings {
     OutputFormat outputFormat     = OutputFormat::MP4;
     int          videoBitRateKbps = 2000;
     int          audioBitRateKbps = 128;
-    float        exportDuration   = 0.0f; // seconds; 0 = full video
+    float        exportStartTime  = 0.0f; // seconds from beginning
+    float        exportDuration   = 0.0f; // seconds; 0 = to end of video
 };
 
 #endif // ENCODER_SETTINGS_H
