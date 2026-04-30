@@ -439,14 +439,25 @@ void VideoPlayer::runEncoding(Demuxer& demuxer, Decoder& decoder,
     int  channels   = demuxer.hasAudio() ? 2 : 0;
     bool preferH264 = settings.videoCodec == EncoderSettings::VideoCodec::H264;
 
+    Muxer muxer;
+    if (!muxer.open(savePath)) {
+        Logger::instance().error("VideoPlayer: failed to open muxer for " + savePath);
+        return;
+    }
+
     Encoder encoder;
-    if (!encoder.open(savePath,
+    if (!encoder.open(muxer,
                       decoder.videoWidth(), decoder.videoHeight(),
                       demuxer.videoTimeBase(),
                       sampleRate, channels,
                       settings.videoBitRateKbps, settings.audioBitRateKbps,
                       preferH264)) {
         Logger::instance().error("VideoPlayer: failed to open encoder for " + savePath);
+        return;
+    }
+
+    if (!muxer.beginFile()) {
+        Logger::instance().error("VideoPlayer: failed to begin muxer file for " + savePath);
         return;
     }
 
@@ -500,6 +511,7 @@ void VideoPlayer::runEncoding(Demuxer& demuxer, Decoder& decoder,
     av_packet_free(&pkt);
 
     encoder.close();
+    muxer.endFile();
 
     if (!cancel) {
         progress = 1.0f;

@@ -31,18 +31,14 @@ Encoder::~Encoder() {
     av_packet_free(&m_packet);
 }
 
-bool Encoder::open(const std::string& outputPath, int width, int height,
+bool Encoder::open(Muxer& muxer, int width, int height,
                    AVRational srcVideoTimeBase, int sampleRate, int channels,
                    int videoBitRateKbps, int audioBitRateKbps, bool preferH264) {
+    m_muxer            = &muxer;
     m_srcVideoTimeBase = srcVideoTimeBase;
-    m_outputPath       = outputPath;
     m_videoBitRate     = videoBitRateKbps * 1000;
     m_audioBitRate     = audioBitRateKbps * 1000;
     m_preferH264       = preferH264;
-
-    if (!m_muxer.open(outputPath)) {
-        return false;
-    }
 
     if (!initVideoStream(width, height)) { cleanup(); return false; }
 
@@ -50,10 +46,7 @@ bool Encoder::open(const std::string& outputPath, int width, int height,
         if (!initAudioStream(sampleRate, channels)) { cleanup(); return false; }
     }
 
-    if (!m_muxer.beginFile()) { cleanup(); return false; }
-
     m_open = true;
-    Logger::instance().info("Encoder: opened " + outputPath);
     return true;
 }
 
@@ -83,7 +76,7 @@ bool Encoder::initVideoStream(int width, int height) {
         m_videoCtx->max_b_frames = 0;
     }
 
-    if (m_muxer.needsGlobalHeader()) {
+    if (m_muxer->needsGlobalHeader()) {
         m_videoCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     }
 
@@ -99,7 +92,7 @@ bool Encoder::initVideoStream(int width, int height) {
     }
     av_dict_free(&opts);
 
-    m_videoStream = m_muxer.addStream(m_videoCtx);
+    m_videoStream = m_muxer->addStream(m_videoCtx);
     if (!m_videoStream) {
         return false;
     }
@@ -132,7 +125,7 @@ bool Encoder::initAudioStream(int sampleRate, int channels) {
         av_channel_layout_copy(&m_audioCtx->ch_layout, &mono);
     }
 
-    if (m_muxer.needsGlobalHeader()) {
+    if (m_muxer->needsGlobalHeader()) {
         m_audioCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     }
 
@@ -141,7 +134,7 @@ bool Encoder::initAudioStream(int sampleRate, int channels) {
         return false;
     }
 
-    m_audioStream = m_muxer.addStream(m_audioCtx);
+    m_audioStream = m_muxer->addStream(m_audioCtx);
     if (!m_audioStream) {
         return false;
     }
@@ -254,7 +247,7 @@ bool Encoder::encodeAndWrite(AVCodecContext* ctx, AVFrame* frame, AVStream* stre
     while (avcodec_receive_packet(ctx, m_packet) >= 0) {
         av_packet_rescale_ts(m_packet, ctx->time_base, stream->time_base);
         m_packet->stream_index = stream->index;
-        m_muxer.writePacket(m_packet);
+        m_muxer->writePacket(m_packet);
         av_packet_unref(m_packet);
     }
     return true;
@@ -269,9 +262,6 @@ bool Encoder::close() {
         encodeAndWrite(m_audioCtx, nullptr, m_audioStream);
     }
 
-    m_muxer.endFile();
-    Logger::instance().info("Encoder: finalized " + m_outputPath);
-
     cleanup();
     m_open = false;
     return true;
@@ -284,7 +274,7 @@ void Encoder::cleanup() {
     if (m_swrCtx)    { swr_free(&m_swrCtx); }
     if (m_videoCtx)  { avcodec_free_context(&m_videoCtx); }
     if (m_audioCtx)  { avcodec_free_context(&m_audioCtx); }
-    m_muxer.close();
+    m_muxer       = nullptr;
     m_videoStream = nullptr;
     m_audioStream = nullptr;
 }

@@ -1,4 +1,5 @@
 #include "Encoder.h"
+#include "Muxer.h"
 #include <gtest/gtest.h>
 #include <cstring>
 #include <filesystem>
@@ -13,7 +14,7 @@ namespace fs = std::filesystem;
 
 class EncoderTest : public ::testing::Test {
 protected:
-    fs::path testDir;
+    fs::path    testDir;
     std::string outPath;
 
     void SetUp() override {
@@ -25,6 +26,17 @@ protected:
 
     void TearDown() override {
         fs::remove_all(testDir);
+    }
+
+    // Open a muxer+encoder pair ready for writing frames.
+    // On success muxer.beginFile() has been called; caller must call
+    // encoder.close() then muxer.endFile() when done.
+    bool openPair(Muxer& muxer, Encoder& enc,
+                  int w = 320, int h = 240,
+                  int sampleRate = 44100, int channels = 2) {
+        return muxer.open(outPath) &&
+               enc.open(muxer, w, h, {1, 12800}, sampleRate, channels) &&
+               muxer.beginFile();
     }
 
     AVFrame* makeSyntheticVideoFrame(int width, int height, int64_t pts = 0) {
@@ -61,23 +73,29 @@ TEST_F(EncoderTest, IsNotOpenByDefault) {
 }
 
 TEST_F(EncoderTest, OpenCreatesOutputFile) {
+    Muxer muxer;
     Encoder enc;
-    ASSERT_TRUE(enc.open(outPath, 320, 240, {1, 12800}));
+    ASSERT_TRUE(openPair(muxer, enc));
     enc.close();
+    muxer.endFile();
     EXPECT_TRUE(fs::exists(outPath));
 }
 
 TEST_F(EncoderTest, IsOpenAfterOpen) {
+    Muxer muxer;
     Encoder enc;
-    ASSERT_TRUE(enc.open(outPath, 320, 240, {1, 12800}));
+    ASSERT_TRUE(openPair(muxer, enc));
     EXPECT_TRUE(enc.isOpen());
     enc.close();
+    muxer.endFile();
 }
 
 TEST_F(EncoderTest, IsClosedAfterClose) {
+    Muxer muxer;
     Encoder enc;
-    ASSERT_TRUE(enc.open(outPath, 320, 240, {1, 12800}));
+    ASSERT_TRUE(openPair(muxer, enc));
     enc.close();
+    muxer.endFile();
     EXPECT_FALSE(enc.isOpen());
 }
 
@@ -87,49 +105,61 @@ TEST_F(EncoderTest, CloseOnUnopenedReturnsFalse) {
 }
 
 TEST_F(EncoderTest, OpenWithBadPathReturnsFalse) {
+    Muxer muxer;
     Encoder enc;
     std::string bad = (testDir / "nonexistent" / "out.mp4").string();
-    EXPECT_FALSE(enc.open(bad, 320, 240, {1, 12800}));
+    ASSERT_TRUE(muxer.open(bad));
+    ASSERT_TRUE(enc.open(muxer, 320, 240, {1, 12800}));
+    EXPECT_FALSE(muxer.beginFile());
 }
 
 TEST_F(EncoderTest, WriteVideoFrameDoesNotCrash) {
+    Muxer muxer;
     Encoder enc;
-    ASSERT_TRUE(enc.open(outPath, 320, 240, {1, 12800}));
+    ASSERT_TRUE(openPair(muxer, enc));
     AVFrame* frame = makeSyntheticVideoFrame(320, 240, 0);
     EXPECT_TRUE(enc.writeVideoFrame(frame));
     av_frame_free(&frame);
     enc.close();
+    muxer.endFile();
 }
 
 TEST_F(EncoderTest, WriteMultipleVideoFramesDoesNotCrash) {
+    Muxer muxer;
     Encoder enc;
-    ASSERT_TRUE(enc.open(outPath, 320, 240, {1, 12800}));
+    ASSERT_TRUE(openPair(muxer, enc));
     for (int i = 0; i < 5; ++i) {
         AVFrame* frame = makeSyntheticVideoFrame(320, 240, static_cast<int64_t>(i) * 3000);
         EXPECT_TRUE(enc.writeVideoFrame(frame));
         av_frame_free(&frame);
     }
     enc.close();
+    muxer.endFile();
 }
 
 TEST_F(EncoderTest, WriteAudioFrameDoesNotCrash) {
+    Muxer muxer;
     Encoder enc;
-    ASSERT_TRUE(enc.open(outPath, 320, 240, {1, 12800}));
+    ASSERT_TRUE(openPair(muxer, enc));
     AVFrame* frame = makeSyntheticAudioFrame();
     EXPECT_TRUE(enc.writeAudioFrame(frame));
     av_frame_free(&frame);
     enc.close();
+    muxer.endFile();
 }
 
 TEST_F(EncoderTest, VideoOnlyOpenSucceeds) {
+    Muxer muxer;
     Encoder enc;
-    EXPECT_TRUE(enc.open(outPath, 320, 240, {1, 12800}, 0, 0));
+    EXPECT_TRUE(openPair(muxer, enc, 320, 240, 0, 0));
     enc.close();
+    muxer.endFile();
 }
 
 TEST_F(EncoderTest, OutputFileHasNonZeroSize) {
+    Muxer muxer;
     Encoder enc;
-    ASSERT_TRUE(enc.open(outPath, 320, 240, {1, 12800}));
+    ASSERT_TRUE(openPair(muxer, enc));
     for (int i = 0; i < 10; ++i) {
         AVFrame* vf = makeSyntheticVideoFrame(320, 240, static_cast<int64_t>(i) * 3000);
         enc.writeVideoFrame(vf);
@@ -139,5 +169,6 @@ TEST_F(EncoderTest, OutputFileHasNonZeroSize) {
         av_frame_free(&af);
     }
     enc.close();
+    muxer.endFile();
     EXPECT_GT(fs::file_size(outPath), static_cast<uintmax_t>(0));
 }

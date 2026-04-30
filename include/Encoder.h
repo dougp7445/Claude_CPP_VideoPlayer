@@ -15,10 +15,11 @@ public:
     Encoder();
     ~Encoder();
 
-    // Open an output file for encoding. srcVideoTimeBase is the time base of
-    // the incoming video frames so PTSes can be rescaled to the encoder's time
-    // base. Pass sampleRate=0 to produce a video-only output.
-    bool open(const std::string& outputPath, int width, int height,
+    // Register codec streams with an already-opened Muxer, then open the
+    // codecs. The caller must call muxer.beginFile() after this returns true
+    // and before the first writeVideoFrame/writeAudioFrame call.
+    // Pass sampleRate=0 to produce a video-only output.
+    bool open(Muxer& muxer, int width, int height,
               AVRational srcVideoTimeBase, int sampleRate = 44100, int channels = 2,
               int videoBitRateKbps = 2000, int audioBitRateKbps = 128,
               bool preferH264 = true);
@@ -29,6 +30,8 @@ public:
     // Write an S16 interleaved stereo audio frame. Pass nullptr to flush.
     bool writeAudioFrame(AVFrame* frame);
 
+    // Flush all codecs and send remaining packets to the muxer.
+    // The caller is responsible for calling muxer.endFile() afterwards.
     bool close();
     bool isOpen() const { return m_open; }
 
@@ -39,7 +42,7 @@ private:
     bool drainAudioFifo(bool flush);
     void cleanup();
 
-    Muxer            m_muxer;
+    Muxer*           m_muxer       = nullptr;  // non-owning
     AVCodecContext*  m_videoCtx    = nullptr;
     AVCodecContext*  m_audioCtx    = nullptr;
     AVStream*        m_videoStream = nullptr;
@@ -55,7 +58,6 @@ private:
     int              m_audioBitRate     = 128000;
     bool             m_preferH264       = true;
     bool             m_open             = false;
-    std::string      m_outputPath;
 };
 
 #endif // ENCODER_H
