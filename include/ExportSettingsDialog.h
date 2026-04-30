@@ -3,13 +3,14 @@
 
 #include <SDL3/SDL.h>
 #include <atomic>
+#include <string>
 #include "DialogWindow.h"
 #include "EncoderSettings.h"
 #include "EncoderSettingsPanel.h"
 
 class ExportSettingsDialog : public DialogWindow {
 public:
-    explicit ExportSettingsDialog(double videoDuration);
+    ExportSettingsDialog(double videoDuration, const std::string& defaultFolder);
 
     bool            wasExported() const { return m_exported; }
     EncoderSettings getSettings()  const { return m_panel.getSettings(); }
@@ -19,6 +20,8 @@ protected:
     void onMouseMotion(float x, float y) override;
     void onMouseButtonDown(float x, float y) override;
     void onMouseButtonUp(float x, float y) override;
+    void onTextInput(const char* text) override;
+    void onKeyDown(SDL_Keycode key) override;
 
 private:
     EncoderSettingsPanel m_panel;
@@ -28,6 +31,7 @@ private:
 // Convenience wrapper: opens the dialog and returns true if the user exported.
 bool showExportDialog(SDL_Renderer*      mainRenderer,
                       double             videoDuration,
+                      const std::string& defaultFolder,
                       std::atomic<bool>& quit,
                       EncoderSettings&   outSettings);
 

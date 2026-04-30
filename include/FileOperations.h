@@ -15,4 +15,9 @@ std::string openFileDialog();
 // Returns the chosen path with the correct extension, or an empty string if canceled.
 std::string saveFileDialog(const std::string& extension = "mp4");
 
+// Shows a native OS folder-picker dialog.
+// defaultFolder sets the initial location shown; pass empty to use the OS default.
+// Returns the selected folder path, or an empty string if canceled.
+std::string openFolderDialog(const std::string& defaultFolder = "");
+
 #endif // FILE_OPERATIONS_H

@@ -14,6 +14,7 @@ void DialogWindow::run(SDL_Renderer* mainRenderer, std::atomic<bool>& quit) {
 
     bool wasCursorVisible = SDL_CursorVisible();
     SDL_ShowCursor();
+    SDL_StartTextInput(win);
     m_done = false;
 
     Logger::instance().trace(std::string("DialogWindow '") + m_title + "' entering render loop");
@@ -39,6 +40,12 @@ void DialogWindow::run(SDL_Renderer* mainRenderer, std::atomic<bool>& quit) {
                 ev.button.button == SDL_BUTTON_LEFT) {
                 onMouseButtonUp(ev.button.x, ev.button.y);
             }
+            if (ev.type == SDL_EVENT_TEXT_INPUT && ev.text.windowID == winID) {
+                onTextInput(ev.text.text);
+            }
+            if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.windowID == winID) {
+                onKeyDown(ev.key.key);
+            }
         }
         if (!m_done && ren) {
             SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
@@ -51,6 +58,7 @@ void DialogWindow::run(SDL_Renderer* mainRenderer, std::atomic<bool>& quit) {
 
     Logger::instance().trace(std::string("DialogWindow '") + m_title + "' exited render loop");
 
+    SDL_StopTextInput(win);
     if (ren) { SDL_DestroyRenderer(ren); }
     if (win) { SDL_DestroyWindow(win); }
     if (!wasCursorVisible) {

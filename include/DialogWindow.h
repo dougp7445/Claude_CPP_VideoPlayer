@@ -18,6 +18,8 @@ protected:
     virtual void onMouseMotion(float x, float y) {}
     virtual void onMouseButtonDown(float x, float y) {}
     virtual void onMouseButtonUp(float x, float y) {}
+    virtual void onTextInput(const char* text) {}
+    virtual void onKeyDown(SDL_Keycode key) {}
 
     void close() { m_done = true; }
 

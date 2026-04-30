@@ -127,3 +127,54 @@ std::string saveFileDialog(const std::string& extension) {
     return {};
 #endif
 }
+
+std::string openFolderDialog(const std::string& defaultFolder) {
+#ifdef _WIN32
+    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+
+    std::string result;
+    IFileOpenDialog* pfd = nullptr;
+    if (SUCCEEDED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER,
+                                   IID_PPV_ARGS(&pfd)))) {
+        FILEOPENDIALOGOPTIONS opts = 0;
+        pfd->GetOptions(&opts);
+        pfd->SetOptions(opts | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM);
+
+        if (!defaultFolder.empty()) {
+            int wLen = MultiByteToWideChar(CP_UTF8, 0, defaultFolder.c_str(), -1, nullptr, 0);
+            if (wLen > 0) {
+                std::wstring wFolder(wLen - 1, L'\0');
+                MultiByteToWideChar(CP_UTF8, 0, defaultFolder.c_str(), -1, wFolder.data(), wLen);
+                IShellItem* psi = nullptr;
+                if (SUCCEEDED(SHCreateItemFromParsingName(wFolder.c_str(), nullptr,
+                                                          IID_PPV_ARGS(&psi)))) {
+                    pfd->SetFolder(psi);
+                    psi->Release();
+                }
+            }
+        }
+
+        if (SUCCEEDED(pfd->Show(nullptr))) {
+            IShellItem* psi = nullptr;
+            if (SUCCEEDED(pfd->GetResult(&psi))) {
+                PWSTR path = nullptr;
+                if (SUCCEEDED(psi->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
+                    int len = WideCharToMultiByte(CP_UTF8, 0, path, -1, nullptr, 0, nullptr, nullptr);
+                    if (len > 0) {
+                        result.resize(len - 1);
+                        WideCharToMultiByte(CP_UTF8, 0, path, -1, result.data(), len, nullptr, nullptr);
+                    }
+                    CoTaskMemFree(path);
+                }
+                psi->Release();
+            }
+        }
+        pfd->Release();
+    }
+
+    CoUninitialize();
+    return result;
+#else
+    return {};
+#endif
+}

@@ -2,17 +2,23 @@
 #define ENCODER_SETTINGS_PANEL_H
 
 #include <SDL3/SDL.h>
+#include <string>
 #include "EncoderSettings.h"
 
 class EncoderSettingsPanel {
 public:
-    enum class Result { None, Cancel, Export };
+    enum class Result { None, Cancel, Export, BrowseFolder };
+
+    ~EncoderSettingsPanel();
 
     void   render(SDL_Renderer* renderer, float W, float H);
     Result handleMouseClick(float mx, float my);
     void   handleMouseMotion(float mx, float my);
     void   handleMouseButtonUp(float mx, float my);
     void   setVideoDuration(double d);
+    void   setOutputFolder(const std::string& folder);
+    void   handleTextInput(const char* text);
+    void   handleKeyDown(SDL_Keycode key);
 
     EncoderSettings getSettings() const;
 
@@ -39,11 +45,18 @@ private:
     SDL_FRect m_videoBrNextRect = {};
     SDL_FRect m_audioBrPrevRect = {};
     SDL_FRect m_audioBrNextRect = {};
-    SDL_FRect m_rangeTrack      = {};
-    SDL_FRect m_startThumb      = {};
-    SDL_FRect m_endThumb        = {};
-    SDL_FRect m_cancelRect      = {};
-    SDL_FRect m_exportRect      = {};
+    SDL_FRect   m_rangeTrack       = {};
+    SDL_FRect   m_startThumb       = {};
+    SDL_FRect   m_endThumb         = {};
+    SDL_FRect   m_folderFieldRect  = {};
+    SDL_FRect   m_browseRect       = {};
+    SDL_FRect   m_cancelRect       = {};
+    SDL_FRect   m_exportRect       = {};
+
+    SDL_Texture* m_folderIconTex   = nullptr;
+
+    std::string m_folderPath;
+    bool        m_folderFocused    = false;
 };
 
 #endif // ENCODER_SETTINGS_PANEL_H

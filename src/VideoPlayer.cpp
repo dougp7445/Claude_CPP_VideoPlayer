@@ -232,8 +232,13 @@ void VideoPlayer::run(std::function<std::string()> filePicker) {
 
 
 void VideoPlayer::runExportDialog() {
+    std::string defaultFolder;
+    if (!m_filePath.empty()) {
+        defaultFolder = std::filesystem::path(m_filePath).parent_path().string();
+    }
     EncoderSettings settings;
-    if (showExportDialog(m_renderer.getSDLRenderer(), m_decoder.duration(), m_quit, settings)) {
+    if (showExportDialog(m_renderer.getSDLRenderer(), m_decoder.duration(),
+                         defaultFolder, m_quit, settings)) {
         m_exportSettings = settings;
         m_requestExport  = true;
     }
@@ -243,7 +248,16 @@ void VideoPlayer::runExportDialog() {
 void VideoPlayer::runExportProgress() {
     std::string ext = (m_exportSettings.outputFormat == EncoderSettings::OutputFormat::TS)
         ? "ts" : "mp4";
-    std::string savePath = saveFileDialog(ext);
+
+    std::string savePath;
+    if (!m_exportSettings.outputFolder.empty()) {
+        std::string stem = std::filesystem::path(m_filePath).stem().string();
+        savePath = (std::filesystem::path(m_exportSettings.outputFolder) /
+                    (stem + "_export." + ext)).string();
+        std::filesystem::create_directories(m_exportSettings.outputFolder);
+    } else {
+        savePath = saveFileDialog(ext);
+    }
     if (savePath.empty()) { return; }
 
     std::atomic<bool>  encodingDone{false};
