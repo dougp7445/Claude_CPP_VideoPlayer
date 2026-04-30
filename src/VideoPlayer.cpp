@@ -21,21 +21,32 @@ VideoPlayer::VideoPlayer()
 VideoPlayer::~VideoPlayer() = default;
 
 bool VideoPlayer::load(const std::string& filePath) {
-    if (!m_decoder.open(filePath)) {
+    if (!m_demuxer.open(filePath)) {
+        return false;
+    }
+    if (!m_decoder.open(m_demuxer.videoCodecParameters(),
+                        m_demuxer.audioCodecParameters(),
+                        m_demuxer.videoTimeBase(),
+                        m_demuxer.audioTimeBase())) {
         return false;
     }
     m_filePath = filePath;
     m_recentFiles.add(filePath);
     m_renderer.setRecentFiles(m_recentFiles.entries());
-    // initWindow must run on the main thread (OS window creation).
     return m_renderer.initWindow("VideoPlayer - " + filePath,
                                  m_decoder.videoWidth(),
                                  m_decoder.videoHeight());
 }
 
-// Runs on the render thread: creates the renderer, decodes and presents frames.
-void VideoPlayer::renderLoop() {
+bool VideoPlayer::seek(double seconds) {
+    if (!m_demuxer.seek(seconds)) {
+        return false;
+    }
+    m_decoder.flushBuffers();
+    return true;
+}
 
+void VideoPlayer::renderLoop() {
     if (!m_renderer.initRenderer()) {
         m_quit = true;
         return;
@@ -43,7 +54,7 @@ void VideoPlayer::renderLoop() {
 
     const double audioLatency = m_renderer.getAudioLatency();
     const double SEEK_STEP    = SEEK_STEP_SECONDS;
-    const double duration     = m_decoder.duration();
+    const double duration     = m_demuxer.duration();
 
     bool     clocked    = false;
     bool     reclock    = false;
@@ -81,8 +92,7 @@ void VideoPlayer::renderLoop() {
                 paused = !paused;
                 if (paused) {
                     m_renderer.pauseAudio();
-                }
-                else {
+                } else {
                     m_renderer.resumeAudio();
                     reclock = true;
                 }
@@ -92,10 +102,9 @@ void VideoPlayer::renderLoop() {
             case PlayerEvent::SeekBackward:
                 target = currentPts + (ev == PlayerEvent::SeekForward ? SEEK_STEP : -SEEK_STEP);
                 target = std::max(0.0, std::min(target, duration));
-                if (m_decoder.seek(target)) {
+                if (seek(target)) {
                     m_renderer.flushAudio();
                     reclock = true;
-
                     if (paused) {
                         paused = false;
                         m_renderer.resumeAudio();
@@ -105,11 +114,9 @@ void VideoPlayer::renderLoop() {
             case PlayerEvent::SeekTo:
                 target = m_renderer.getSeekTarget() * duration;
                 target = std::max(0.0, std::min(target, duration));
-
-                if (m_decoder.seek(target)) {
+                if (seek(target)) {
                     m_renderer.flushAudio();
                     reclock = true;
-
                     if (paused) {
                         paused = false;
                         m_renderer.resumeAudio();
@@ -142,8 +149,20 @@ void VideoPlayer::renderLoop() {
             continue;
         }
 
+        // Pull packets from the demuxer and feed them to the decoder until
+        // a frame comes out (needed for codecs that buffer across packets).
         DecodedFrame frame;
-        if (!m_decoder.readFrame(frame)) {
+        bool gotFrame = false;
+        AVPacket* pkt = av_packet_alloc();
+        while (!gotFrame) {
+            if (!m_demuxer.readPacket(pkt)) {
+                break;
+            }
+            gotFrame = m_decoder.decode(pkt, m_demuxer.isVideoPacket(pkt), frame);
+        }
+        av_packet_free(&pkt);
+
+        if (!gotFrame) {
             break;
         }
 
@@ -168,7 +187,7 @@ void VideoPlayer::renderLoop() {
             double targetWall = (frame.pts - startPts) / speed + audioLatency;
             double wall       = static_cast<double>(SDL_GetTicks() - startTick) / 1000.0;
 
-            if (targetWall > wall){
+            if (targetWall > wall) {
                 SDL_Delay(static_cast<Uint32>((targetWall - wall) * 1000.0));
             }
 
@@ -208,7 +227,6 @@ void VideoPlayer::run(std::function<std::string()> filePicker) {
 
         if (!m_requestOpenFile) { break; }
 
-        // Check if the user selected a recent file from the menu; otherwise show the picker.
         std::string newPath = m_renderer.takePendingOpenPath();
         if (newPath.empty()) {
             newPath = filePicker();
@@ -217,8 +235,15 @@ void VideoPlayer::run(std::function<std::string()> filePicker) {
             continue;
         }
 
+        m_demuxer.close();
         m_decoder.close();
-        if (!m_decoder.open(newPath)) { break; }
+        if (!m_demuxer.open(newPath)) { break; }
+        if (!m_decoder.open(m_demuxer.videoCodecParameters(),
+                            m_demuxer.audioCodecParameters(),
+                            m_demuxer.videoTimeBase(),
+                            m_demuxer.audioTimeBase())) {
+            break;
+        }
 
         m_filePath = newPath;
         m_recentFiles.add(newPath);
@@ -230,14 +255,13 @@ void VideoPlayer::run(std::function<std::string()> filePicker) {
     }
 }
 
-
 void VideoPlayer::runExportDialog() {
     std::string defaultFolder;
     if (!m_filePath.empty()) {
         defaultFolder = std::filesystem::path(m_filePath).parent_path().string();
     }
     EncoderSettings settings;
-    if (showExportDialog(m_renderer.getSDLRenderer(), m_decoder.duration(),
+    if (showExportDialog(m_renderer.getSDLRenderer(), m_demuxer.duration(),
                          defaultFolder, m_quit, settings)) {
         m_exportSettings = settings;
         m_requestExport  = true;
@@ -265,13 +289,23 @@ void VideoPlayer::runExportProgress() {
     std::atomic<float> encodingProgress{0.0f};
 
     std::thread encThread([&]() {
+        Demuxer encDemuxer;
+        if (!encDemuxer.open(m_filePath)) {
+            Logger::instance().error("VideoPlayer: failed to open demuxer for encoding");
+            encodingDone = true;
+            return;
+        }
         Decoder encDecoder;
-        if (!encDecoder.open(m_filePath)) {
+        if (!encDecoder.open(encDemuxer.videoCodecParameters(),
+                             encDemuxer.audioCodecParameters(),
+                             encDemuxer.videoTimeBase(),
+                             encDemuxer.audioTimeBase())) {
             Logger::instance().error("VideoPlayer: failed to open decoder for encoding");
             encodingDone = true;
             return;
         }
-        runEncoding(encDecoder, savePath, m_exportSettings, cancelEncoding, encodingProgress);
+        runEncoding(encDemuxer, encDecoder, savePath, m_exportSettings,
+                    cancelEncoding, encodingProgress);
         encodingDone = true;
     });
 
@@ -390,22 +424,25 @@ void VideoPlayer::runExportProgress() {
     }
 }
 
-void VideoPlayer::runEncoding(Decoder& decoder, const std::string& savePath, const EncoderSettings& settings,
+void VideoPlayer::runEncoding(Demuxer& demuxer, Decoder& decoder,
+                              const std::string& savePath, const EncoderSettings& settings,
                               std::atomic<bool>& cancel, std::atomic<float>& progress) {
     double exportStart = static_cast<double>(settings.exportStartTime);
-    if (!decoder.seek(exportStart)) {
+
+    if (!demuxer.seek(exportStart)) {
         Logger::instance().error("VideoPlayer: failed to seek to start for encoding");
         return;
     }
+    decoder.flushBuffers();
 
-    int  sampleRate = decoder.hasAudio() ? 44100 : 0;
-    int  channels   = decoder.hasAudio() ? 2 : 0;
+    int  sampleRate = demuxer.hasAudio() ? 44100 : 0;
+    int  channels   = demuxer.hasAudio() ? 2 : 0;
     bool preferH264 = settings.videoCodec == EncoderSettings::VideoCodec::H264;
 
     Encoder encoder;
     if (!encoder.open(savePath,
                       decoder.videoWidth(), decoder.videoHeight(),
-                      decoder.videoTimeBase(),
+                      demuxer.videoTimeBase(),
                       sampleRate, channels,
                       settings.videoBitRateKbps, settings.audioBitRateKbps,
                       preferH264)) {
@@ -413,20 +450,27 @@ void VideoPlayer::runEncoding(Decoder& decoder, const std::string& savePath, con
         return;
     }
 
-    double duration    = decoder.duration();
+    double duration    = demuxer.duration();
     double exportLimit = (settings.exportDuration > 0.0f)
                          ? exportStart + static_cast<double>(settings.exportDuration)
                          : duration;
     double clipLength  = exportLimit - exportStart;
 
-    // Pre-compute PTS offset in the video stream's native time base so that
-    // the output file's timestamps start at 0 regardless of where in the
-    // source the clip begins.
-    AVRational vtb = decoder.videoTimeBase();
+    AVRational vtb = demuxer.videoTimeBase();
     int64_t videoPtsOffset = static_cast<int64_t>(exportStart * vtb.den / vtb.num);
 
-    DecodedFrame frame;
-    while (!cancel && decoder.readFrame(frame)) {
+    AVPacket* pkt = av_packet_alloc();
+    while (!cancel) {
+        if (!demuxer.readPacket(pkt)) {
+            break;
+        }
+
+        bool isVideo = demuxer.isVideoPacket(pkt);
+        DecodedFrame frame;
+        if (!decoder.decode(pkt, isVideo, frame)) {
+            continue;
+        }
+
         if (clipLength > 0.0) {
             float p = static_cast<float>((frame.pts - exportStart) / clipLength);
             progress = p < 0.0f ? 0.0f : (p < 1.0f ? p : 1.0f);
@@ -453,6 +497,7 @@ void VideoPlayer::runEncoding(Decoder& decoder, const std::string& savePath, con
             av_frame_free(&frame.audioFrame);
         }
     }
+    av_packet_free(&pkt);
 
     encoder.close();
 

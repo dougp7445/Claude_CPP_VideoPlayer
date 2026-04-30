@@ -48,7 +48,7 @@ gtest_discover_tests(EncoderTests)
 
 
 # Decoder Tests
-add_executable(DecoderTests DecoderTests.cpp ../src/Decoder.cpp ../src/Logger.cpp)
+add_executable(DecoderTests DecoderTests.cpp ../src/Decoder.cpp ../src/Demuxer.cpp ../src/Logger.cpp)
 
 target_include_directories(DecoderTests PRIVATE
     ../include
@@ -93,6 +93,7 @@ gtest_discover_tests(FileOperationsTests)
 add_executable(RendererTests
     RendererTests.cpp
     ../src/Decoder.cpp
+    ../src/Demuxer.cpp
     ../src/Logger.cpp
     ../src/MenuUI.cpp
     ../src/PlayerUI.cpp
@@ -135,6 +136,7 @@ gtest_discover_tests(RendererTests)
 add_executable(VideoPlayerTests
     VideoPlayerTests.cpp
     ../src/Decoder.cpp
+    ../src/Demuxer.cpp
     ../src/DialogWindow.cpp
     ../src/Encoder.cpp
     ../src/EncoderSettingsPanel.cpp

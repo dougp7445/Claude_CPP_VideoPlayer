@@ -2,6 +2,7 @@
 #define VIDEO_PLAYER_H
 
 #include "Decoder.h"
+#include "Demuxer.h"
 #include "EncoderSettings.h"
 #include "FileOperations.h"
 #include "Renderer.h"
@@ -22,9 +23,13 @@ private:
     void renderLoop();
     void runExportDialog();
     void runExportProgress();
-    void runEncoding(Decoder& decoder, const std::string& savePath, const EncoderSettings& settings,
+    void runEncoding(Demuxer& demuxer, Decoder& decoder,
+                     const std::string& savePath, const EncoderSettings& settings,
                      std::atomic<bool>& cancel, std::atomic<float>& progress);
 
+    bool seek(double seconds);
+
+    Demuxer  m_demuxer;
     Decoder  m_decoder;
     Renderer m_renderer;
 
