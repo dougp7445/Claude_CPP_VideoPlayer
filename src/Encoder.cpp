@@ -9,17 +9,17 @@ extern "C" {
 }
 
 namespace {
-    constexpr const char* CODEC_H264          = "libx264";
-    constexpr const char* CODEC_MPEG4         = "mpeg4";
-    constexpr const char* OPT_PRESET          = "preset";
-    constexpr const char* OPT_PRESET_VAL      = "medium";
-    constexpr const char* OPT_CRF             = "crf";
-    constexpr const char* OPT_CRF_VAL         = "23";
+    constexpr const char* CODEC_H264         = "libx264";
+    constexpr const char* CODEC_MPEG4        = "mpeg4";
+    constexpr const char* OPT_PRESET         = "preset";
+    constexpr const char* OPT_PRESET_VAL     = "medium";
+    constexpr const char* OPT_CRF            = "crf";
+    constexpr const char* OPT_CRF_VAL        = "23";
 
-    constexpr int VIDEO_TIMEBASE_DEN          = 12800;
-    constexpr int VIDEO_GOP_SIZE              = 12;
+    constexpr int VIDEO_TIMEBASE_DEN         = 12800;
+    constexpr int VIDEO_GOP_SIZE             = 12;
     constexpr int AUDIO_SWR_BUF_SAMPLES      = 8192;
-    constexpr int AUDIO_FALLBACK_FRAME_SIZE   = 4096;
+    constexpr int AUDIO_FALLBACK_FRAME_SIZE  = 4096;
 }
 
 Encoder::Encoder() {
@@ -40,8 +40,7 @@ bool Encoder::open(const std::string& outputPath, int width, int height,
     m_audioBitRate     = audioBitRateKbps * 1000;
     m_preferH264       = preferH264;
 
-    if (avformat_alloc_output_context2(&m_fmtCtx, nullptr, nullptr, outputPath.c_str()) < 0) {
-        Logger::instance().error("Encoder: failed to allocate output context for " + outputPath);
+    if (!m_muxer.open(outputPath)) {
         return false;
     }
 
@@ -51,19 +50,7 @@ bool Encoder::open(const std::string& outputPath, int width, int height,
         if (!initAudioStream(sampleRate, channels)) { cleanup(); return false; }
     }
 
-    if (!(m_fmtCtx->oformat->flags & AVFMT_NOFILE)) {
-        if (avio_open(&m_fmtCtx->pb, outputPath.c_str(), AVIO_FLAG_WRITE) < 0) {
-            Logger::instance().error("Encoder: failed to open output file " + outputPath);
-            cleanup();
-            return false;
-        }
-    }
-
-    if (avformat_write_header(m_fmtCtx, nullptr) < 0) {
-        Logger::instance().error("Encoder: failed to write output header");
-        cleanup();
-        return false;
-    }
+    if (!m_muxer.beginFile()) { cleanup(); return false; }
 
     m_open = true;
     Logger::instance().info("Encoder: opened " + outputPath);
@@ -82,24 +69,21 @@ bool Encoder::initVideoStream(int width, int height) {
         return false;
     }
 
-    m_videoStream = avformat_new_stream(m_fmtCtx, nullptr);
-    if (!m_videoStream) { return false; }
-
     m_videoCtx = avcodec_alloc_context3(codec);
     m_videoCtx->codec_id  = codec->id;
     m_videoCtx->bit_rate  = m_videoBitRate;
     m_videoCtx->width     = width;
     m_videoCtx->height    = height;
-    m_videoCtx->time_base = {1, VIDEO_TIMEBASE_DEN}; // within MPEG-4's 65535 denominator limit
+    m_videoCtx->time_base = {1, VIDEO_TIMEBASE_DEN};
     m_videoCtx->framerate = {0, 1};
-    m_videoCtx->gop_size     = VIDEO_GOP_SIZE;
-    m_videoCtx->pix_fmt      = AV_PIX_FMT_YUV420P;
+    m_videoCtx->gop_size  = VIDEO_GOP_SIZE;
+    m_videoCtx->pix_fmt   = AV_PIX_FMT_YUV420P;
     // MPEG4 warns when given consecutive B-frames; disable them explicitly.
     if (codec->id == AV_CODEC_ID_MPEG4) {
         m_videoCtx->max_b_frames = 0;
     }
 
-    if (m_fmtCtx->oformat->flags & AVFMT_GLOBALHEADER) {
+    if (m_muxer.needsGlobalHeader()) {
         m_videoCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     }
 
@@ -115,8 +99,10 @@ bool Encoder::initVideoStream(int width, int height) {
     }
     av_dict_free(&opts);
 
-    avcodec_parameters_from_context(m_videoStream->codecpar, m_videoCtx);
-    m_videoStream->time_base = m_videoCtx->time_base;
+    m_videoStream = m_muxer.addStream(m_videoCtx);
+    if (!m_videoStream) {
+        return false;
+    }
 
     Logger::instance().info(
         "Encoder: video — " + std::string(codec->name) +
@@ -132,9 +118,6 @@ bool Encoder::initAudioStream(int sampleRate, int channels) {
         return false;
     }
 
-    m_audioStream = avformat_new_stream(m_fmtCtx, nullptr);
-    if (!m_audioStream) { return false; }
-
     m_audioCtx = avcodec_alloc_context3(codec);
     m_audioCtx->sample_fmt  = AV_SAMPLE_FMT_FLTP;
     m_audioCtx->bit_rate    = m_audioBitRate;
@@ -149,7 +132,7 @@ bool Encoder::initAudioStream(int sampleRate, int channels) {
         av_channel_layout_copy(&m_audioCtx->ch_layout, &mono);
     }
 
-    if (m_fmtCtx->oformat->flags & AVFMT_GLOBALHEADER) {
+    if (m_muxer.needsGlobalHeader()) {
         m_audioCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     }
 
@@ -158,8 +141,10 @@ bool Encoder::initAudioStream(int sampleRate, int channels) {
         return false;
     }
 
-    avcodec_parameters_from_context(m_audioStream->codecpar, m_audioCtx);
-    m_audioStream->time_base = m_audioCtx->time_base;
+    m_audioStream = m_muxer.addStream(m_audioCtx);
+    if (!m_audioStream) {
+        return false;
+    }
 
     Logger::instance().info(
         "Encoder: audio — " + std::string(codec->name) +
@@ -218,7 +203,7 @@ bool Encoder::writeVideoFrame(AVFrame* frame) {
 
     AVFrame* copy = av_frame_clone(frame);
     copy->pts       = av_rescale_q(frame->pts, m_srcVideoTimeBase, m_videoCtx->time_base);
-    copy->pict_type = AV_PICTURE_TYPE_NONE; // let the encoder decide; avoids inheriting B-frame type from source
+    copy->pict_type = AV_PICTURE_TYPE_NONE;
     bool ok = encodeAndWrite(m_videoCtx, copy, m_videoStream);
     av_frame_free(&copy);
     return ok;
@@ -269,7 +254,7 @@ bool Encoder::encodeAndWrite(AVCodecContext* ctx, AVFrame* frame, AVStream* stre
     while (avcodec_receive_packet(ctx, m_packet) >= 0) {
         av_packet_rescale_ts(m_packet, ctx->time_base, stream->time_base);
         m_packet->stream_index = stream->index;
-        av_interleaved_write_frame(m_fmtCtx, m_packet);
+        m_muxer.writePacket(m_packet);
         av_packet_unref(m_packet);
     }
     return true;
@@ -284,12 +269,8 @@ bool Encoder::close() {
         encodeAndWrite(m_audioCtx, nullptr, m_audioStream);
     }
 
-    av_write_trailer(m_fmtCtx);
+    m_muxer.endFile();
     Logger::instance().info("Encoder: finalized " + m_outputPath);
-
-    if (m_fmtCtx && !(m_fmtCtx->oformat->flags & AVFMT_NOFILE)) {
-        avio_closep(&m_fmtCtx->pb);
-    }
 
     cleanup();
     m_open = false;
@@ -297,13 +278,13 @@ bool Encoder::close() {
 }
 
 void Encoder::cleanup() {
-    if (m_audioFifo)  { av_audio_fifo_free(m_audioFifo); m_audioFifo = nullptr; }
-    if (m_swrFrame)   { av_frame_free(&m_swrFrame); }
-    if (m_encFrame)   { av_frame_free(&m_encFrame); }
-    if (m_swrCtx)     { swr_free(&m_swrCtx); }
-    if (m_videoCtx)   { avcodec_free_context(&m_videoCtx); }
-    if (m_audioCtx)   { avcodec_free_context(&m_audioCtx); }
-    if (m_fmtCtx)     { avformat_free_context(m_fmtCtx); m_fmtCtx = nullptr; }
+    if (m_audioFifo) { av_audio_fifo_free(m_audioFifo); m_audioFifo = nullptr; }
+    if (m_swrFrame)  { av_frame_free(&m_swrFrame); }
+    if (m_encFrame)  { av_frame_free(&m_encFrame); }
+    if (m_swrCtx)    { swr_free(&m_swrCtx); }
+    if (m_videoCtx)  { avcodec_free_context(&m_videoCtx); }
+    if (m_audioCtx)  { avcodec_free_context(&m_audioCtx); }
+    m_muxer.close();
     m_videoStream = nullptr;
     m_audioStream = nullptr;
 }
