@@ -9,6 +9,7 @@ extern "C" {
 }
 
 #include <thread>
+#include "Constants.h"
 #include "LockingQueue.h"
 
 class AudioEncoder {
@@ -17,7 +18,7 @@ public:
     ~AudioEncoder();
 
     // Open the AAC audio codec. Expects S16 interleaved input frames.
-    bool open(int sampleRate, int channels, int bitRateKbps = 128,
+    bool open(int sampleRate, int channels, int bitRateKbps = ENC_DEFAULT_AUDIO_BITRATE_KBPS,
               bool needsGlobalHeader = false);
 
     // Extract time_base and index from a muxer-supplied stream before writing.
@@ -57,7 +58,7 @@ private:
     AVRational              m_streamTimeBase = {1, 1};
     int                     m_streamIndex    = -1;
     int64_t                 m_sampleCount    = 0;
-    int                     m_bitRate        = 128000;
+    int                     m_bitRate        = ENC_DEFAULT_AUDIO_BITRATE_KBPS * KBPS_TO_BPS;
     bool                    m_open           = false;
 };
 

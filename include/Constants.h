@@ -74,4 +74,24 @@ static constexpr int BITRATE_4K_LOW      = 15000000; // 15.0 Mbps
 static constexpr int BITRATE_4K_MED      = 25000000; // 25.0 Mbps
 static constexpr int BITRATE_4K_HIGH     = 45000000; // 45.0 Mbps
 
+// ── Bitrate conversion ────────────────────────────────────────────────────────
+static constexpr int KBPS_TO_BPS = 1000;
+
+// ── Video encoding ────────────────────────────────────────────────────────────
+static constexpr int         ENC_DEFAULT_VIDEO_BITRATE_KBPS = 2000;
+static constexpr const char* CODEC_H264         = "libx264";
+static constexpr const char* CODEC_MPEG4        = "mpeg4";
+static constexpr const char* ENC_OPT_PRESET     = "preset";
+static constexpr const char* ENC_OPT_PRESET_VAL = "medium";
+static constexpr const char* ENC_OPT_CRF        = "crf";
+static constexpr const char* ENC_OPT_CRF_VAL    = "23";
+static constexpr int         VIDEO_TIMEBASE_DEN  = 12800;
+static constexpr int         VIDEO_GOP_SIZE      = 12;
+
+// ── Audio encoding ────────────────────────────────────────────────────────────
+static constexpr int ENC_DEFAULT_AUDIO_BITRATE_KBPS = 128;
+static constexpr int AUDIO_SWR_BUF_SAMPLES     = 8192;
+static constexpr int AUDIO_FALLBACK_FRAME_SIZE = 4096;
+static constexpr int AUDIO_FIFO_HEADROOM_FRAMES = 2; // FIFO capacity = frameSize * this
+
 #endif // CONSTANTS_H

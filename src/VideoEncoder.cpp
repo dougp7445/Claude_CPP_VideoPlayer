@@ -1,19 +1,9 @@
 #include "VideoEncoder.h"
+#include "Constants.h"
 #include "Logger.h"
 
 extern "C" {
 #include <libavutil/opt.h>
-}
-
-namespace {
-    constexpr const char* CODEC_H264         = "libx264";
-    constexpr const char* CODEC_MPEG4        = "mpeg4";
-    constexpr const char* OPT_PRESET         = "preset";
-    constexpr const char* OPT_PRESET_VAL     = "medium";
-    constexpr const char* OPT_CRF            = "crf";
-    constexpr const char* OPT_CRF_VAL        = "23";
-    constexpr int         VIDEO_TIMEBASE_DEN = 12800;
-    constexpr int         VIDEO_GOP_SIZE     = 12;
 }
 
 VideoEncoder::VideoEncoder() {
@@ -28,7 +18,7 @@ VideoEncoder::~VideoEncoder() {
 bool VideoEncoder::open(int width, int height, AVRational srcTimeBase,
                         int bitRateKbps, bool preferH264, bool needsGlobalHeader) {
     m_srcTimeBase = srcTimeBase;
-    m_bitRate     = bitRateKbps * 1000;
+    m_bitRate     = bitRateKbps * KBPS_TO_BPS;
     m_preferH264  = preferH264;
 
     const AVCodec* codec = nullptr;
@@ -58,8 +48,8 @@ bool VideoEncoder::open(int width, int height, AVRational srcTimeBase,
 
     AVDictionary* opts = nullptr;
     if (codec->id == AV_CODEC_ID_H264) {
-        av_dict_set(&opts, OPT_PRESET, OPT_PRESET_VAL, 0);
-        av_dict_set(&opts, OPT_CRF,    OPT_CRF_VAL,    0);
+        av_dict_set(&opts, ENC_OPT_PRESET, ENC_OPT_PRESET_VAL, 0);
+        av_dict_set(&opts, ENC_OPT_CRF,   ENC_OPT_CRF_VAL,   0);
     }
     if (avcodec_open2(m_ctx, codec, &opts) < 0) {
         av_dict_free(&opts);
@@ -72,7 +62,7 @@ bool VideoEncoder::open(int width, int height, AVRational srcTimeBase,
     Logger::instance().info(
         "VideoEncoder: " + std::string(codec->name) +
         " " + std::to_string(width) + "x" + std::to_string(height) +
-        " @ " + std::to_string(m_bitRate / 1000) + " kbps");
+        " @ " + std::to_string(m_bitRate / KBPS_TO_BPS) + " kbps");
 
     m_open = true;
     return true;

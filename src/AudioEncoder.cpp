@@ -1,4 +1,5 @@
 #include "AudioEncoder.h"
+#include "Constants.h"
 #include "Logger.h"
 #include <algorithm>
 #include <cstring>
@@ -6,11 +7,6 @@
 extern "C" {
 #include <libavutil/channel_layout.h>
 #include <libavutil/opt.h>
-}
-
-namespace {
-    constexpr int AUDIO_SWR_BUF_SAMPLES     = 8192;
-    constexpr int AUDIO_FALLBACK_FRAME_SIZE = 4096;
 }
 
 AudioEncoder::AudioEncoder() {
@@ -24,7 +20,7 @@ AudioEncoder::~AudioEncoder() {
 
 bool AudioEncoder::open(int sampleRate, int channels, int bitRateKbps,
                         bool needsGlobalHeader) {
-    m_bitRate = bitRateKbps * 1000;
+    m_bitRate = bitRateKbps * KBPS_TO_BPS;
 
     const AVCodec* codec = avcodec_find_encoder(AV_CODEC_ID_AAC);
     if (!codec) {
@@ -38,7 +34,7 @@ bool AudioEncoder::open(int sampleRate, int channels, int bitRateKbps,
     m_ctx->sample_rate = sampleRate;
     m_ctx->time_base   = {1, sampleRate};
 
-    if (channels >= 2) {
+    if (channels >= CHANNELS_STEREO) {
         AVChannelLayout stereo = AV_CHANNEL_LAYOUT_STEREO;
         av_channel_layout_copy(&m_ctx->ch_layout, &stereo);
     } else {
@@ -60,11 +56,11 @@ bool AudioEncoder::open(int sampleRate, int channels, int bitRateKbps,
         "AudioEncoder: " + std::string(codec->name) +
         " " + std::to_string(sampleRate) + " Hz" +
         " " + std::to_string(channels) + " ch" +
-        " @ " + std::to_string(m_bitRate / 1000) + " kbps");
+        " @ " + std::to_string(m_bitRate / KBPS_TO_BPS) + " kbps");
 
     AVChannelLayout srcLayout = {};
     AVChannelLayout dstLayout = {};
-    if (channels >= 2) {
+    if (channels >= CHANNELS_STEREO) {
         AVChannelLayout stereo = AV_CHANNEL_LAYOUT_STEREO;
         av_channel_layout_copy(&srcLayout, &stereo);
         av_channel_layout_copy(&dstLayout, &stereo);
@@ -88,7 +84,7 @@ bool AudioEncoder::open(int sampleRate, int channels, int bitRateKbps,
     }
 
     int frameSize = m_ctx->frame_size > 0 ? m_ctx->frame_size : AUDIO_FALLBACK_FRAME_SIZE;
-    m_fifo = av_audio_fifo_alloc(AV_SAMPLE_FMT_FLTP, channels, frameSize * 2);
+    m_fifo = av_audio_fifo_alloc(AV_SAMPLE_FMT_FLTP, channels, frameSize * AUDIO_FIFO_HEADROOM_FRAMES);
     if (!m_fifo) { cleanup(); return false; }
 
     m_swrFrame = av_frame_alloc();

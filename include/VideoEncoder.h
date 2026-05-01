@@ -7,6 +7,7 @@ extern "C" {
 }
 
 #include <thread>
+#include "Constants.h"
 #include "LockingQueue.h"
 
 class VideoEncoder {
@@ -16,7 +17,7 @@ public:
 
     // Open the video codec. srcTimeBase is the time base of incoming frames.
     bool open(int width, int height, AVRational srcTimeBase,
-              int bitRateKbps = 2000, bool preferH264 = true,
+              int bitRateKbps = ENC_DEFAULT_VIDEO_BITRATE_KBPS, bool preferH264 = true,
               bool needsGlobalHeader = false);
 
     // Extract time_base and index from a muxer-supplied stream before writing.
@@ -51,7 +52,7 @@ private:
     AVRational              m_srcTimeBase    = {1, 1};
     AVRational              m_streamTimeBase = {1, 1};
     int                     m_streamIndex    = -1;
-    int                     m_bitRate        = 2000000;
+    int                     m_bitRate        = ENC_DEFAULT_VIDEO_BITRATE_KBPS * KBPS_TO_BPS;
     bool                    m_preferH264     = true;
     bool                    m_open           = false;
 };
