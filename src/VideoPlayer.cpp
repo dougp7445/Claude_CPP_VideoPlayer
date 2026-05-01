@@ -439,6 +439,9 @@ void VideoPlayer::runEncoding(Demuxer& demuxer, Decoder& decoder,
     int  channels   = demuxer.hasAudio() ? 2 : 0;
     bool preferH264 = settings.videoCodec == EncoderSettings::VideoCodec::H264;
 
+    LockingQueue<DecodedFrame> frameQueue;
+    LockingQueue<AVPacket*>   queue;
+
     Muxer muxer;
     if (!muxer.open(savePath)) {
         Logger::instance().error("VideoPlayer: failed to open muxer for " + savePath);
@@ -446,7 +449,7 @@ void VideoPlayer::runEncoding(Demuxer& demuxer, Decoder& decoder,
     }
 
     Encoder encoder;
-    if (!encoder.open(muxer,
+    if (!encoder.open(muxer, queue,
                       decoder.videoWidth(), decoder.videoHeight(),
                       demuxer.videoTimeBase(),
                       sampleRate, channels,
@@ -460,6 +463,9 @@ void VideoPlayer::runEncoding(Demuxer& demuxer, Decoder& decoder,
         Logger::instance().error("VideoPlayer: failed to begin muxer file for " + savePath);
         return;
     }
+
+    muxer.startAsync(queue);
+    encoder.startAsync(frameQueue);
 
     double duration    = demuxer.duration();
     double exportLimit = (settings.exportDuration > 0.0f)
@@ -500,13 +506,10 @@ void VideoPlayer::runEncoding(Demuxer& demuxer, Decoder& decoder,
         if (frame.videoFrame) {
             frame.videoFrame->pts -= videoPtsOffset;
             if (frame.videoFrame->pts < 0) { frame.videoFrame->pts = 0; }
-            encoder.writeVideoFrame(frame.videoFrame);
-            av_frame_free(&frame.videoFrame);
         }
-        if (frame.audioFrame) {
-            encoder.writeAudioFrame(frame.audioFrame);
-            av_frame_free(&frame.audioFrame);
-        }
+        frameQueue.push(frame);
+        frame.videoFrame = nullptr;
+        frame.audioFrame = nullptr;
     }
     av_packet_free(&pkt);
 

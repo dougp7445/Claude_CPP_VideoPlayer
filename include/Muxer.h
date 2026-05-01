@@ -7,6 +7,8 @@ extern "C" {
 }
 
 #include <string>
+#include <thread>
+#include "LockingQueue.h"
 
 class Muxer {
 public:
@@ -30,6 +32,10 @@ public:
     // Call after all addStream() calls and before any writePacket() calls.
     bool beginFile();
 
+    // Start a background thread that drains queue and writes each packet.
+    // Call after beginFile() and before the encoder begins producing packets.
+    bool startAsync(LockingQueue<AVPacket*>& queue);
+
     // Write one encoded packet using interleaved muxing.
     bool writePacket(AVPacket* packet);
 
@@ -42,6 +48,8 @@ public:
 private:
     AVFormatContext* m_fmtCtx     = nullptr;
     std::string      m_outputPath;
+    std::thread      m_writeThread;
+    LockingQueue<AVPacket*>* m_queue = nullptr;  // non-owning, for cleanup
 };
 
 #endif // MUXER_H

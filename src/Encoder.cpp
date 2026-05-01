@@ -31,10 +31,11 @@ Encoder::~Encoder() {
     av_packet_free(&m_packet);
 }
 
-bool Encoder::open(Muxer& muxer, int width, int height,
+bool Encoder::open(Muxer& muxer, LockingQueue<AVPacket*>& queue, int width, int height,
                    AVRational srcVideoTimeBase, int sampleRate, int channels,
                    int videoBitRateKbps, int audioBitRateKbps, bool preferH264) {
     m_muxer            = &muxer;
+    m_queue            = &queue;
     m_srcVideoTimeBase = srcVideoTimeBase;
     m_videoBitRate     = videoBitRateKbps * 1000;
     m_audioBitRate     = audioBitRateKbps * 1000;
@@ -247,19 +248,54 @@ bool Encoder::encodeAndWrite(AVCodecContext* ctx, AVFrame* frame, AVStream* stre
     while (avcodec_receive_packet(ctx, m_packet) >= 0) {
         av_packet_rescale_ts(m_packet, ctx->time_base, stream->time_base);
         m_packet->stream_index = stream->index;
-        m_muxer->writePacket(m_packet);
-        av_packet_unref(m_packet);
+        AVPacket* copy = av_packet_alloc();
+        av_packet_move_ref(copy, m_packet);
+        m_queue->push(copy);
     }
+    return true;
+}
+
+bool Encoder::startAsync(LockingQueue<DecodedFrame>& frameQueue) {
+    m_frameQueue = &frameQueue;
+    m_encodeThread = std::thread([this, &frameQueue] {
+        DecodedFrame frame;
+        while (frameQueue.pop(frame)) {
+            if (frame.videoFrame) {
+                writeVideoFrame(frame.videoFrame);
+                av_frame_free(&frame.videoFrame);
+            }
+            if (frame.audioFrame) {
+                writeAudioFrame(frame.audioFrame);
+                av_frame_free(&frame.audioFrame);
+            }
+        }
+        // Flush codecs and signal the muxer thread to drain.
+        if (m_videoCtx) { encodeAndWrite(m_videoCtx, nullptr, m_videoStream); }
+        if (m_audioCtx) {
+            drainAudioFifo(true);
+            encodeAndWrite(m_audioCtx, nullptr, m_audioStream);
+        }
+        if (m_queue) { m_queue->close(); }
+    });
     return true;
 }
 
 bool Encoder::close() {
     if (!m_open) { return false; }
 
-    if (m_videoCtx) { encodeAndWrite(m_videoCtx, nullptr, m_videoStream); }
-    if (m_audioCtx) {
-        drainAudioFifo(true);
-        encodeAndWrite(m_audioCtx, nullptr, m_audioStream);
+    if (m_encodeThread.joinable()) {
+        // Close the frame queue so the encoder thread drains and exits.
+        if (m_frameQueue) { m_frameQueue->close(); }
+        m_encodeThread.join();
+        // Thread already flushed codecs and closed the packet queue.
+    } else {
+        // Synchronous flush (no startAsync was called).
+        if (m_videoCtx) { encodeAndWrite(m_videoCtx, nullptr, m_videoStream); }
+        if (m_audioCtx) {
+            drainAudioFifo(true);
+            encodeAndWrite(m_audioCtx, nullptr, m_audioStream);
+        }
+        if (m_queue) { m_queue->close(); }
     }
 
     cleanup();
@@ -275,6 +311,8 @@ void Encoder::cleanup() {
     if (m_videoCtx)  { avcodec_free_context(&m_videoCtx); }
     if (m_audioCtx)  { avcodec_free_context(&m_audioCtx); }
     m_muxer       = nullptr;
+    m_queue       = nullptr;
+    m_frameQueue  = nullptr;
     m_videoStream = nullptr;
     m_audioStream = nullptr;
 }

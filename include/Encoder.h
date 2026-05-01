@@ -8,7 +8,10 @@ extern "C" {
 }
 
 #include <string>
+#include <thread>
+#include "Decoder.h"
 #include "Muxer.h"
+#include "LockingQueue.h"
 
 class Encoder {
 public:
@@ -19,7 +22,7 @@ public:
     // codecs. The caller must call muxer.beginFile() after this returns true
     // and before the first writeVideoFrame/writeAudioFrame call.
     // Pass sampleRate=0 to produce a video-only output.
-    bool open(Muxer& muxer, int width, int height,
+    bool open(Muxer& muxer, LockingQueue<AVPacket*>& queue, int width, int height,
               AVRational srcVideoTimeBase, int sampleRate = 44100, int channels = 2,
               int videoBitRateKbps = 2000, int audioBitRateKbps = 128,
               bool preferH264 = true);
@@ -30,7 +33,13 @@ public:
     // Write an S16 interleaved stereo audio frame. Pass nullptr to flush.
     bool writeAudioFrame(AVFrame* frame);
 
+    // Start a background thread that drains frameQueue and encodes each frame.
+    // Call after open() and before the decoder begins producing frames.
+    // The thread flushes the codecs and closes the packet queue when done.
+    bool startAsync(LockingQueue<DecodedFrame>& frameQueue);
+
     // Flush all codecs and send remaining packets to the muxer.
+    // If startAsync() was called, closes the frame queue and joins the thread.
     // The caller is responsible for calling muxer.endFile() afterwards.
     bool close();
     bool isOpen() const { return m_open; }
@@ -42,7 +51,10 @@ private:
     bool drainAudioFifo(bool flush);
     void cleanup();
 
-    Muxer*           m_muxer       = nullptr;  // non-owning
+    Muxer*                       m_muxer      = nullptr;  // non-owning
+    LockingQueue<AVPacket*>*     m_queue      = nullptr;  // non-owning
+    LockingQueue<DecodedFrame>*  m_frameQueue = nullptr;  // non-owning
+    std::thread                  m_encodeThread;
     AVCodecContext*  m_videoCtx    = nullptr;
     AVCodecContext*  m_audioCtx    = nullptr;
     AVStream*        m_videoStream = nullptr;

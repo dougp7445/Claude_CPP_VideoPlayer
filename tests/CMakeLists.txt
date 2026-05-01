@@ -23,6 +23,7 @@ add_executable(EncoderTests
     EncoderTests.cpp
     ../src/Encoder.cpp
     ../src/Muxer.cpp
+    ../src/LockingQueue.cpp
     ../src/Logger.cpp
 )
 
@@ -141,6 +142,7 @@ add_executable(VideoPlayerTests
     ../src/DialogWindow.cpp
     ../src/Encoder.cpp
     ../src/Muxer.cpp
+    ../src/LockingQueue.cpp
     ../src/EncoderSettingsPanel.cpp
     ../src/ExportSettingsDialog.cpp
     ../src/FileOperations.cpp
