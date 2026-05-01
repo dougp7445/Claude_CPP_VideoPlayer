@@ -9,6 +9,11 @@ extern "C" {
 #include <libswresample/swresample.h>
 }
 
+#include <functional>
+#include <thread>
+#include "Demuxer.h"
+#include "LockingQueue.h"
+
 struct DecodedFrame {
     AVFrame* videoFrame = nullptr;
     AVFrame* audioFrame = nullptr;
@@ -34,6 +39,18 @@ public:
     // B-frames) or on error. isVideo must match the packet's stream type.
     bool decode(const AVPacket* packet, bool isVideo, DecodedFrame& out);
 
+    // Start a background thread that drains packetQueue, decodes each packet,
+    // and passes the result to filter. filter receives the DecodedFrame and
+    // returns true to continue or false to stop early. When done (queue drained
+    // or filter returns false), the thread closes frameQueue.
+    bool startAsync(Demuxer& demuxer,
+                    LockingQueue<AVPacket*>& packetQueue,
+                    LockingQueue<DecodedFrame>& frameQueue,
+                    std::function<bool(DecodedFrame&)> filter);
+
+    // Close the raw-packet queue and join the decode thread.
+    void waitDone();
+
     int videoWidth()  const { return m_codecCtxVideo ? m_codecCtxVideo->width  : 0; }
     int videoHeight() const { return m_codecCtxVideo ? m_codecCtxVideo->height : 0; }
 
@@ -48,6 +65,9 @@ private:
 
     bool initVideoCodec(AVCodecParameters* par);
     bool initAudioCodec(AVCodecParameters* par);
+
+    std::thread              m_decodeThread;
+    LockingQueue<AVPacket*>* m_rawPktQueue = nullptr;  // non-owning, for cleanup
 };
 
 #endif // DECODER_H

@@ -15,7 +15,9 @@ add_executable(VideoPlayer
     src/DialogWindow.cpp
     src/Encoder.cpp
     src/Muxer.cpp
+    src/ExportVideo.cpp
     src/LockingQueue.cpp
+    src/MainWindow.cpp
     src/EncoderSettingsPanel.cpp
     src/ExportSettingsDialog.cpp
     src/FileOperations.cpp
