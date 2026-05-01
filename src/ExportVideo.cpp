@@ -1,9 +1,10 @@
 #include "ExportVideo.h"
+#include "AudioEncoder.h"
 #include "Decoder.h"
 #include "Demuxer.h"
-#include "Encoder.h"
 #include "Logger.h"
 #include "Muxer.h"
+#include "VideoEncoder.h"
 #include <cstdint>
 
 ExportVideo::~ExportVideo() {
@@ -58,13 +59,10 @@ void ExportVideo::run(const std::string& inputPath,
     }
     decoder.flushBuffers();
 
-    int  sampleRate = demuxer.hasAudio() ? 44100 : 0;
-    int  channels   = demuxer.hasAudio() ? 2 : 0;
+    bool hasAudio   = demuxer.hasAudio();
+    int  sampleRate = hasAudio ? 44100 : 0;
+    int  channels   = hasAudio ? 2 : 0;
     bool preferH264 = settings.videoCodec == EncoderSettings::VideoCodec::H264;
-
-    LockingQueue<AVPacket*>    rawPktQueue;
-    LockingQueue<DecodedFrame> frameQueue;
-    LockingQueue<AVPacket*>    packetQueue;
 
     Muxer muxer;
     if (!muxer.open(outputPath)) {
@@ -73,16 +71,27 @@ void ExportVideo::run(const std::string& inputPath,
         return;
     }
 
-    Encoder encoder;
-    if (!encoder.open(muxer, packetQueue,
-                      decoder.videoWidth(), decoder.videoHeight(),
-                      demuxer.videoTimeBase(),
-                      sampleRate, channels,
-                      settings.videoBitRateKbps, settings.audioBitRateKbps,
-                      preferH264)) {
-        Logger::instance().error("ExportVideo: failed to open encoder for " + outputPath);
+    VideoEncoder videoEncoder;
+    if (!videoEncoder.open(decoder.videoWidth(), decoder.videoHeight(),
+                           demuxer.videoTimeBase(),
+                           settings.videoBitRateKbps, preferH264,
+                           muxer.needsGlobalHeader())) {
+        Logger::instance().error("ExportVideo: failed to open video encoder for " + outputPath);
         m_done = true;
         return;
+    }
+    videoEncoder.setStream(muxer.addStream(videoEncoder.codecContext()));
+
+    AudioEncoder audioEncoder;
+    if (hasAudio) {
+        if (!audioEncoder.open(sampleRate, channels,
+                               settings.audioBitRateKbps,
+                               muxer.needsGlobalHeader())) {
+            Logger::instance().error("ExportVideo: failed to open audio encoder for " + outputPath);
+            m_done = true;
+            return;
+        }
+        audioEncoder.setStream(muxer.addStream(audioEncoder.codecContext()));
     }
 
     if (!muxer.beginFile()) {
@@ -91,8 +100,16 @@ void ExportVideo::run(const std::string& inputPath,
         return;
     }
 
-    muxer.startAsync(packetQueue);
-    encoder.startAsync(frameQueue);
+    if (hasAudio) {
+        muxer.startAsync(videoEncoder.outputQueue(), audioEncoder.outputQueue());
+    } else {
+        muxer.startAsync(videoEncoder.outputQueue());
+    }
+
+    videoEncoder.startAsync(decoder.videoOutputQueue());
+    if (hasAudio) {
+        audioEncoder.startAsync(decoder.audioOutputQueue());
+    }
 
     double duration    = demuxer.duration();
     double exportLimit = (settings.exportDuration > 0.0f)
@@ -103,7 +120,7 @@ void ExportVideo::run(const std::string& inputPath,
     AVRational vtb = demuxer.videoTimeBase();
     int64_t videoPtsOffset = static_cast<int64_t>(exportStart * vtb.den / vtb.num);
 
-    decoder.startAsync(demuxer, rawPktQueue, frameQueue,
+    decoder.startAsync(demuxer, demuxer.outputQueue(),
         [&](DecodedFrame& frame) -> bool {
             if (clipLength > 0.0) {
                 float p = static_cast<float>((frame.pts - exportStart) / clipLength);
@@ -114,7 +131,6 @@ void ExportVideo::run(const std::string& inputPath,
                 av_frame_free(&frame.audioFrame);
                 return false;
             }
-            // Skip pre-roll frames that arrive before exportStart.
             if (frame.pts < exportStart) {
                 av_frame_free(&frame.videoFrame);
                 av_frame_free(&frame.audioFrame);
@@ -124,9 +140,6 @@ void ExportVideo::run(const std::string& inputPath,
                 frame.videoFrame->pts -= videoPtsOffset;
                 if (frame.videoFrame->pts < 0) { frame.videoFrame->pts = 0; }
             }
-            frameQueue.push(frame);
-            frame.videoFrame = nullptr;
-            frame.audioFrame = nullptr;
             return !m_cancel.load();
         });
 
@@ -135,12 +148,13 @@ void ExportVideo::run(const std::string& inputPath,
         if (!demuxer.readPacket(pkt)) { break; }
         AVPacket* copy = av_packet_alloc();
         av_packet_move_ref(copy, pkt);
-        rawPktQueue.push(copy);
+        demuxer.outputQueue().push(copy);
     }
     av_packet_free(&pkt);
 
-    rawPktQueue.close();
-    encoder.close();
+    demuxer.outputQueue().close();
+    videoEncoder.close();
+    if (hasAudio) { audioEncoder.close(); }
     decoder.waitDone();
     muxer.endFile();
 

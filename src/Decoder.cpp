@@ -70,10 +70,8 @@ bool Decoder::initAudioCodec(AVCodecParameters* par) {
 
 bool Decoder::startAsync(Demuxer& demuxer,
                          LockingQueue<AVPacket*>& packetQueue,
-                         LockingQueue<DecodedFrame>& frameQueue,
                          std::function<bool(DecodedFrame&)> filter) {
-    m_rawPktQueue = &packetQueue;
-    m_decodeThread = std::thread([this, &demuxer, &packetQueue, &frameQueue,
+    m_decodeThread = std::thread([this, &demuxer, &packetQueue,
                                   filter = std::move(filter)] {
         bool active = true;
         AVPacket* pkt = nullptr;
@@ -83,20 +81,29 @@ bool Decoder::startAsync(Demuxer& demuxer,
                 DecodedFrame frame;
                 if (decode(pkt, isVideo, frame)) {
                     active = filter(frame);
-                    if (!active) { frameQueue.close(); }
+                    if (active) {
+                        if (frame.videoFrame) { m_videoOutputQueue.push(frame.videoFrame); frame.videoFrame = nullptr; }
+                        if (frame.audioFrame) { m_audioOutputQueue.push(frame.audioFrame); frame.audioFrame = nullptr; }
+                    } else {
+                        av_frame_free(&frame.videoFrame);
+                        av_frame_free(&frame.audioFrame);
+                        m_videoOutputQueue.close();
+                        m_audioOutputQueue.close();
+                    }
                 }
             }
             av_packet_free(&pkt);
         }
-        if (active) { frameQueue.close(); }
+        if (active) {
+            m_videoOutputQueue.close();
+            m_audioOutputQueue.close();
+        }
     });
     return true;
 }
 
 void Decoder::waitDone() {
-    if (m_rawPktQueue) { m_rawPktQueue->close(); }
     if (m_decodeThread.joinable()) { m_decodeThread.join(); }
-    m_rawPktQueue = nullptr;
 }
 
 void Decoder::close() {

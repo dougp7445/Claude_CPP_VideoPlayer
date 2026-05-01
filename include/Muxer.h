@@ -6,6 +6,7 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 }
 
+#include <mutex>
 #include <string>
 #include <thread>
 #include "LockingQueue.h"
@@ -36,6 +37,10 @@ public:
     // Call after beginFile() and before the encoder begins producing packets.
     bool startAsync(LockingQueue<AVPacket*>& queue);
 
+    // Two-queue variant: drains videoQueue and audioQueue on separate threads,
+    // serializing writes with an internal mutex.
+    bool startAsync(LockingQueue<AVPacket*>& videoQueue, LockingQueue<AVPacket*>& audioQueue);
+
     // Write one encoded packet using interleaved muxing.
     bool writePacket(AVPacket* packet);
 
@@ -46,10 +51,13 @@ public:
     void close();
 
 private:
-    AVFormatContext* m_fmtCtx     = nullptr;
-    std::string      m_outputPath;
-    std::thread      m_writeThread;
-    LockingQueue<AVPacket*>* m_queue = nullptr;  // non-owning, for cleanup
+    AVFormatContext*         m_fmtCtx    = nullptr;
+    std::string              m_outputPath;
+    std::thread              m_writeThread;
+    std::thread              m_writeThread2;
+    std::mutex               m_writeMutex;
+    LockingQueue<AVPacket*>* m_queue  = nullptr;
+    LockingQueue<AVPacket*>* m_queue2 = nullptr;
 };
 
 #endif // MUXER_H

@@ -7,6 +7,7 @@ extern "C" {
 #include <libavutil/rational.h>
 }
 
+#include "LockingQueue.h"
 #include <string>
 
 class Demuxer {
@@ -35,10 +36,13 @@ public:
     AVCodecParameters* videoCodecParameters() const;
     AVCodecParameters* audioCodecParameters() const;
 
+    LockingQueue<AVPacket*>& outputQueue() { return m_outputQueue; }
+
 private:
-    AVFormatContext* m_fmtCtx         = nullptr;
-    int              m_videoStreamIdx = -1;
-    int              m_audioStreamIdx = -1;
+    AVFormatContext*        m_fmtCtx         = nullptr;
+    int                     m_videoStreamIdx = -1;
+    int                     m_audioStreamIdx = -1;
+    LockingQueue<AVPacket*> m_outputQueue;
 };
 
 #endif // DEMUXER_H

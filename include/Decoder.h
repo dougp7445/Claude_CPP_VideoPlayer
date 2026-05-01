@@ -42,14 +42,16 @@ public:
     // Start a background thread that drains packetQueue, decodes each packet,
     // and passes the result to filter. filter receives the DecodedFrame and
     // returns true to continue or false to stop early. When done (queue drained
-    // or filter returns false), the thread closes frameQueue.
+    // or filter returns false), the thread closes its owned outputQueue.
     bool startAsync(Demuxer& demuxer,
                     LockingQueue<AVPacket*>& packetQueue,
-                    LockingQueue<DecodedFrame>& frameQueue,
                     std::function<bool(DecodedFrame&)> filter);
 
-    // Close the raw-packet queue and join the decode thread.
+    // Join the decode thread.
     void waitDone();
+
+    LockingQueue<AVFrame*>& videoOutputQueue() { return m_videoOutputQueue; }
+    LockingQueue<AVFrame*>& audioOutputQueue() { return m_audioOutputQueue; }
 
     int videoWidth()  const { return m_codecCtxVideo ? m_codecCtxVideo->width  : 0; }
     int videoHeight() const { return m_codecCtxVideo ? m_codecCtxVideo->height : 0; }
@@ -66,8 +68,9 @@ private:
     bool initVideoCodec(AVCodecParameters* par);
     bool initAudioCodec(AVCodecParameters* par);
 
-    std::thread              m_decodeThread;
-    LockingQueue<AVPacket*>* m_rawPktQueue = nullptr;  // non-owning, for cleanup
+    std::thread            m_decodeThread;
+    LockingQueue<AVFrame*> m_videoOutputQueue;
+    LockingQueue<AVFrame*> m_audioOutputQueue;
 };
 
 #endif // DECODER_H

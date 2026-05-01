@@ -1,5 +1,6 @@
 #include "Muxer.h"
 #include "Logger.h"
+#include <mutex>
 
 Muxer::Muxer() = default;
 
@@ -56,6 +57,22 @@ bool Muxer::startAsync(LockingQueue<AVPacket*>& queue) {
     return true;
 }
 
+bool Muxer::startAsync(LockingQueue<AVPacket*>& videoQueue, LockingQueue<AVPacket*>& audioQueue) {
+    m_queue  = &videoQueue;
+    m_queue2 = &audioQueue;
+    auto drain = [this](LockingQueue<AVPacket*>& q) {
+        AVPacket* pkt = nullptr;
+        while (q.pop(pkt)) {
+            std::lock_guard<std::mutex> lock(m_writeMutex);
+            writePacket(pkt);
+            av_packet_free(&pkt);
+        }
+    };
+    m_writeThread  = std::thread(drain, std::ref(videoQueue));
+    m_writeThread2 = std::thread(drain, std::ref(audioQueue));
+    return true;
+}
+
 bool Muxer::writePacket(AVPacket* packet) {
     return av_interleaved_write_frame(m_fmtCtx, packet) >= 0;
 }
@@ -64,8 +81,8 @@ bool Muxer::endFile() {
     if (!m_fmtCtx) {
         return false;
     }
-    // Drain the write thread before writing the trailer.
-    if (m_writeThread.joinable()) { m_writeThread.join(); }
+    if (m_writeThread.joinable())  { m_writeThread.join(); }
+    if (m_writeThread2.joinable()) { m_writeThread2.join(); }
     av_write_trailer(m_fmtCtx);
     if (!(m_fmtCtx->oformat->flags & AVFMT_NOFILE)) {
         avio_closep(&m_fmtCtx->pb);
@@ -74,9 +91,10 @@ bool Muxer::endFile() {
 }
 
 void Muxer::close() {
-    // Ensure the queue is closed so the write thread can exit, then join it.
-    if (m_queue) { m_queue->close(); }
-    if (m_writeThread.joinable()) { m_writeThread.join(); }
+    if (m_queue)  { m_queue->close(); }
+    if (m_queue2) { m_queue2->close(); }
+    if (m_writeThread.joinable())  { m_writeThread.join(); }
+    if (m_writeThread2.joinable()) { m_writeThread2.join(); }
     if (m_fmtCtx) {
         // On error paths endFile() may not have run, so close pb if still open.
         if (!(m_fmtCtx->oformat->flags & AVFMT_NOFILE) && m_fmtCtx->pb) {

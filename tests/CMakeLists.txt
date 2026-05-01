@@ -21,7 +21,8 @@ gtest_discover_tests(LoggerTests)
 # Encoder Tests
 add_executable(EncoderTests
     EncoderTests.cpp
-    ../src/Encoder.cpp
+    ../src/AudioEncoder.cpp
+    ../src/VideoEncoder.cpp
     ../src/Muxer.cpp
     ../src/LockingQueue.cpp
     ../src/Logger.cpp
@@ -137,11 +138,12 @@ gtest_discover_tests(RendererTests)
 # VideoPlayer Tests
 add_executable(VideoPlayerTests
     VideoPlayerTests.cpp
+    ../src/AudioEncoder.cpp
     ../src/Decoder.cpp
     ../src/Demuxer.cpp
     ../src/DialogWindow.cpp
-    ../src/Encoder.cpp
     ../src/Muxer.cpp
+    ../src/VideoEncoder.cpp
     ../src/ExportVideo.cpp
     ../src/LockingQueue.cpp
     ../src/EncoderSettingsPanel.cpp

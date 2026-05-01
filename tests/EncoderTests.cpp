@@ -1,5 +1,6 @@
-#include "Encoder.h"
+#include "AudioEncoder.h"
 #include "Muxer.h"
+#include "VideoEncoder.h"
 #include "LockingQueue.h"
 #include <gtest/gtest.h>
 #include <cstring>
@@ -29,16 +30,32 @@ protected:
         fs::remove_all(testDir);
     }
 
-    // Open a muxer+encoder pair ready for writing frames.
-    // On success muxer.beginFile() has been called and the async write thread
-    // is running; caller must call encoder.close() then muxer.endFile() when done.
-    bool openPair(Muxer& muxer, Encoder& enc, LockingQueue<AVPacket*>& queue,
-                  int w = 320, int h = 240,
-                  int sampleRate = 44100, int channels = 2) {
-        return muxer.open(outPath) &&
-               enc.open(muxer, queue, w, h, {1, 12800}, sampleRate, channels) &&
-               muxer.beginFile() &&
-               muxer.startAsync(queue);
+    // Open a muxer + video + audio pipeline ready for writing frames.
+    // On success muxer.beginFile() has been called and the async write threads
+    // are running. Caller must call video.close(), audio.close(), then
+    // muxer.endFile() when done.
+    bool openAVPair(Muxer& muxer, VideoEncoder& video, AudioEncoder& audio,
+                    int w = 320, int h = 240,
+                    int sampleRate = 44100, int channels = 2) {
+        if (!muxer.open(outPath)) { return false; }
+        if (!video.open(w, h, {1, 12800}, 2000, true,
+                        muxer.needsGlobalHeader())) { return false; }
+        if (!audio.open(sampleRate, channels, 128,
+                        muxer.needsGlobalHeader())) { return false; }
+        video.setStream(muxer.addStream(video.codecContext()));
+        audio.setStream(muxer.addStream(audio.codecContext()));
+        return muxer.beginFile() &&
+               muxer.startAsync(video.outputQueue(), audio.outputQueue());
+    }
+
+    // Open a video-only pipeline.
+    bool openVideoPair(Muxer& muxer, VideoEncoder& video,
+                       int w = 320, int h = 240) {
+        if (!muxer.open(outPath)) { return false; }
+        if (!video.open(w, h, {1, 12800}, 2000, true,
+                        muxer.needsGlobalHeader())) { return false; }
+        video.setStream(muxer.addStream(video.codecContext()));
+        return muxer.beginFile() && muxer.startAsync(video.outputQueue());
     }
 
     AVFrame* makeSyntheticVideoFrame(int width, int height, int64_t pts = 0) {
@@ -70,116 +87,136 @@ protected:
 };
 
 TEST_F(EncoderTest, IsNotOpenByDefault) {
-    Encoder enc;
-    EXPECT_FALSE(enc.isOpen());
+    VideoEncoder video;
+    EXPECT_FALSE(video.isOpen());
+    AudioEncoder audio;
+    EXPECT_FALSE(audio.isOpen());
 }
 
 TEST_F(EncoderTest, OpenCreatesOutputFile) {
-    LockingQueue<AVPacket*> queue;
     Muxer muxer;
-    Encoder enc;
-    ASSERT_TRUE(openPair(muxer, enc, queue));
-    enc.close();
+    VideoEncoder video;
+    AudioEncoder audio;
+    ASSERT_TRUE(openAVPair(muxer, video, audio));
+    video.close();
+    audio.close();
     muxer.endFile();
     EXPECT_TRUE(fs::exists(outPath));
 }
 
 TEST_F(EncoderTest, IsOpenAfterOpen) {
-    LockingQueue<AVPacket*> queue;
     Muxer muxer;
-    Encoder enc;
-    ASSERT_TRUE(openPair(muxer, enc, queue));
-    EXPECT_TRUE(enc.isOpen());
-    enc.close();
+    VideoEncoder video;
+    AudioEncoder audio;
+    ASSERT_TRUE(openAVPair(muxer, video, audio));
+    EXPECT_TRUE(video.isOpen());
+    EXPECT_TRUE(audio.isOpen());
+    video.close();
+    audio.close();
     muxer.endFile();
 }
 
 TEST_F(EncoderTest, IsClosedAfterClose) {
-    LockingQueue<AVPacket*> queue;
     Muxer muxer;
-    Encoder enc;
-    ASSERT_TRUE(openPair(muxer, enc, queue));
-    enc.close();
+    VideoEncoder video;
+    AudioEncoder audio;
+    ASSERT_TRUE(openAVPair(muxer, video, audio));
+    video.close();
+    audio.close();
     muxer.endFile();
-    EXPECT_FALSE(enc.isOpen());
+    EXPECT_FALSE(video.isOpen());
+    EXPECT_FALSE(audio.isOpen());
 }
 
 TEST_F(EncoderTest, CloseOnUnopenedReturnsFalse) {
-    Encoder enc;
-    EXPECT_FALSE(enc.close());
+    VideoEncoder video;
+    EXPECT_FALSE(video.close());
+    AudioEncoder audio;
+    EXPECT_FALSE(audio.close());
 }
 
 TEST_F(EncoderTest, OpenWithBadPathReturnsFalse) {
-    LockingQueue<AVPacket*> queue;
     Muxer muxer;
-    Encoder enc;
+    VideoEncoder video;
+    AudioEncoder audio;
     std::string bad = (testDir / "nonexistent" / "out.mp4").string();
     ASSERT_TRUE(muxer.open(bad));
-    ASSERT_TRUE(enc.open(muxer, queue, 320, 240, {1, 12800}));
+    ASSERT_TRUE(video.open(320, 240, {1, 12800}, 2000, true,
+                           muxer.needsGlobalHeader()));
+    ASSERT_TRUE(audio.open(44100, 2, 128, muxer.needsGlobalHeader()));
+    if (video.codecContext()) {
+        video.setStream(muxer.addStream(video.codecContext()));
+    }
+    if (audio.codecContext()) {
+        audio.setStream(muxer.addStream(audio.codecContext()));
+    }
     EXPECT_FALSE(muxer.beginFile());
 }
 
 TEST_F(EncoderTest, WriteVideoFrameDoesNotCrash) {
-    LockingQueue<AVPacket*> queue;
     Muxer muxer;
-    Encoder enc;
-    ASSERT_TRUE(openPair(muxer, enc, queue));
+    VideoEncoder video;
+    AudioEncoder audio;
+    ASSERT_TRUE(openAVPair(muxer, video, audio));
     AVFrame* frame = makeSyntheticVideoFrame(320, 240, 0);
-    EXPECT_TRUE(enc.writeVideoFrame(frame));
+    EXPECT_TRUE(video.writeFrame(frame));
     av_frame_free(&frame);
-    enc.close();
+    video.close();
+    audio.close();
     muxer.endFile();
 }
 
 TEST_F(EncoderTest, WriteMultipleVideoFramesDoesNotCrash) {
-    LockingQueue<AVPacket*> queue;
     Muxer muxer;
-    Encoder enc;
-    ASSERT_TRUE(openPair(muxer, enc, queue));
+    VideoEncoder video;
+    AudioEncoder audio;
+    ASSERT_TRUE(openAVPair(muxer, video, audio));
     for (int i = 0; i < 5; ++i) {
         AVFrame* frame = makeSyntheticVideoFrame(320, 240, static_cast<int64_t>(i) * 3000);
-        EXPECT_TRUE(enc.writeVideoFrame(frame));
+        EXPECT_TRUE(video.writeFrame(frame));
         av_frame_free(&frame);
     }
-    enc.close();
+    video.close();
+    audio.close();
     muxer.endFile();
 }
 
 TEST_F(EncoderTest, WriteAudioFrameDoesNotCrash) {
-    LockingQueue<AVPacket*> queue;
     Muxer muxer;
-    Encoder enc;
-    ASSERT_TRUE(openPair(muxer, enc, queue));
+    VideoEncoder video;
+    AudioEncoder audio;
+    ASSERT_TRUE(openAVPair(muxer, video, audio));
     AVFrame* frame = makeSyntheticAudioFrame();
-    EXPECT_TRUE(enc.writeAudioFrame(frame));
+    EXPECT_TRUE(audio.writeFrame(frame));
     av_frame_free(&frame);
-    enc.close();
+    video.close();
+    audio.close();
     muxer.endFile();
 }
 
 TEST_F(EncoderTest, VideoOnlyOpenSucceeds) {
-    LockingQueue<AVPacket*> queue;
     Muxer muxer;
-    Encoder enc;
-    EXPECT_TRUE(openPair(muxer, enc, queue, 320, 240, 0, 0));
-    enc.close();
+    VideoEncoder video;
+    EXPECT_TRUE(openVideoPair(muxer, video));
+    video.close();
     muxer.endFile();
 }
 
 TEST_F(EncoderTest, OutputFileHasNonZeroSize) {
-    LockingQueue<AVPacket*> queue;
     Muxer muxer;
-    Encoder enc;
-    ASSERT_TRUE(openPair(muxer, enc, queue));
+    VideoEncoder video;
+    AudioEncoder audio;
+    ASSERT_TRUE(openAVPair(muxer, video, audio));
     for (int i = 0; i < 10; ++i) {
         AVFrame* vf = makeSyntheticVideoFrame(320, 240, static_cast<int64_t>(i) * 3000);
-        enc.writeVideoFrame(vf);
+        video.writeFrame(vf);
         av_frame_free(&vf);
         AVFrame* af = makeSyntheticAudioFrame();
-        enc.writeAudioFrame(af);
+        audio.writeFrame(af);
         av_frame_free(&af);
     }
-    enc.close();
+    video.close();
+    audio.close();
     muxer.endFile();
     EXPECT_GT(fs::file_size(outPath), static_cast<uintmax_t>(0));
 }
