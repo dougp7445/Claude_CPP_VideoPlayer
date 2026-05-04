@@ -3,13 +3,15 @@
 
 extern "C" {
 #include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
 #include <libavutil/frame.h>
+#include <libavutil/rational.h>
 #include <libswscale/swscale.h>
 #include <libswresample/swresample.h>
 }
 
-#include <string>
+#include <functional>
+#include <thread>
+#include "LockingQueue.h"
 
 struct DecodedFrame {
     AVFrame* videoFrame = nullptr;
@@ -22,31 +24,52 @@ public:
     Decoder();
     ~Decoder();
 
-    bool open(const std::string& filePath);
+    // Initialize codecs from demuxer-supplied parameters and time bases.
+    // Pass nullptr for audioParams to produce a video-only decoder.
+    bool open(AVCodecParameters* videoParams, AVCodecParameters* audioParams,
+              AVRational videoTimeBase, AVRational audioTimeBase);
     void close();
 
-    bool readFrame(DecodedFrame& out);
-    bool seek(double seconds);
+    // Flush codec and resampler buffers after a seek.
+    void flushBuffers();
+
+    // Feed one packet from the demuxer. Returns true if a decoded frame is
+    // ready in `out`; returns false when the codec needs more packets (e.g.
+    // B-frames) or on error. isVideo must match the packet's stream type.
+    bool decode(const AVPacket* packet, bool isVideo, DecodedFrame& out);
+
+    // Start a background thread that drains packetQueue, decodes each packet,
+    // and passes the result to filter. filter receives the DecodedFrame and
+    // returns true to continue or false to stop early. When done (queue drained
+    // or filter returns false), the thread closes its owned outputQueue.
+    bool startAsync(int videoStreamIndex,
+                    LockingQueue<AVPacket*>& packetQueue,
+                    std::function<bool(DecodedFrame&)> filter);
+
+    // Join the decode thread.
+    void waitDone();
+
+    LockingQueue<AVFrame*>& videoOutputQueue() { return m_videoOutputQueue; }
+    LockingQueue<AVFrame*>& audioOutputQueue() { return m_audioOutputQueue; }
 
     int videoWidth()  const { return m_codecCtxVideo ? m_codecCtxVideo->width  : 0; }
     int videoHeight() const { return m_codecCtxVideo ? m_codecCtxVideo->height : 0; }
-    double duration() const;
 
 private:
-    AVFormatContext* m_fmtCtx        = nullptr;
-    AVCodecContext*  m_codecCtxVideo = nullptr;
-    AVCodecContext*  m_codecCtxAudio = nullptr;
-    SwsContext*      m_swsCtx        = nullptr;
-    SwrContext*      m_swrCtx        = nullptr;
+    AVCodecContext* m_codecCtxVideo = nullptr;
+    AVCodecContext* m_codecCtxAudio = nullptr;
+    SwsContext*     m_swsCtx        = nullptr;
+    SwrContext*     m_swrCtx        = nullptr;
+    AVFrame*        m_frame         = nullptr;
+    AVRational      m_videoTimeBase = {0, 1};
+    AVRational      m_audioTimeBase = {0, 1};
 
-    int m_videoStreamIdx = -1;
-    int m_audioStreamIdx = -1;
+    bool initVideoCodec(AVCodecParameters* par);
+    bool initAudioCodec(AVCodecParameters* par);
 
-    AVPacket* m_packet = nullptr;
-    AVFrame*  m_frame  = nullptr;
-
-    bool initVideoCodec();
-    bool initAudioCodec();
+    std::thread            m_decodeThread;
+    LockingQueue<AVFrame*> m_videoOutputQueue;
+    LockingQueue<AVFrame*> m_audioOutputQueue;
 };
 
 #endif // DECODER_H

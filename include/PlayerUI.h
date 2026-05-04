@@ -50,8 +50,8 @@ private:
     bool  m_muted         = false;
 
     // Visibility / activity
-    bool     m_uiVisible      = true;
-    uint64_t m_lastActivityMs = 0;   // 0 = not yet initialised
+    bool     m_uiVisible           = true;
+    uint64_t m_lastActivityMs      = 0;   // 0 = not yet initialised
 
     double m_seekTarget = 0.0;
 

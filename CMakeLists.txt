@@ -10,7 +10,17 @@ set(NANOSVG_DIR  "${CMAKE_SOURCE_DIR}/libraries/Windows/nanosvg")
 
 add_executable(VideoPlayer
     src/main.cpp
+    src/AudioEncoder.cpp
     src/Decoder.cpp
+    src/Demuxer.cpp
+    src/DialogWindow.cpp
+    src/Muxer.cpp
+    src/VideoEncoder.cpp
+    src/ExportVideo.cpp
+    src/LockingQueue.cpp
+    src/MainWindow.cpp
+    src/EncoderSettingsPanel.cpp
+    src/ExportSettingsDialog.cpp
     src/FileOperations.cpp
     src/Logger.cpp
     src/MenuUI.cpp

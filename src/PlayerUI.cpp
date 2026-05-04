@@ -129,7 +129,7 @@ void PlayerUI::render(SDL_Renderer* renderer,
         m_lastActivityMs = SDL_GetTicks();
     }
 
-    // Auto-hide after inactivity while playing.
+    // Auto-hide after inactivity while playing
     uint64_t now = SDL_GetTicks();
     if (!paused && now - m_lastActivityMs > UI_HIDE_MS) {
         if (m_uiVisible) {

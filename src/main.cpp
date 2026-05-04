@@ -1,4 +1,4 @@
-#include "VideoPlayer.h"
+#include "MainWindow.h"
 #include "FileOperations.h"
 #include "Logger.h"
 #include <chrono>
@@ -25,12 +25,12 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    VideoPlayer player;
-    if (!player.load(filePath)) {
+    MainWindow window;
+    if (!window.load(filePath)) {
         Logger::instance().error("Failed to load: " + filePath);
         return 1;
     }
 
-    player.run();
+    window.run();
     return 0;
 }

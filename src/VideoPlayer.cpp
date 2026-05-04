@@ -1,15 +1,9 @@
 #include "VideoPlayer.h"
 #include "Constants.h"
 #include "FileOperations.h"
+#include "Logger.h"
 #include <algorithm>
-#include <cstdint>
-#include <iostream>
 #include <string>
-#include <thread>
-
-extern "C" {
-#include <libavutil/frame.h>
-}
 
 VideoPlayer::VideoPlayer()
     : m_recentFiles(executableDir() + "recent_files.json")
@@ -17,28 +11,77 @@ VideoPlayer::VideoPlayer()
 VideoPlayer::~VideoPlayer() = default;
 
 bool VideoPlayer::load(const std::string& filePath) {
-    if (!m_decoder.open(filePath)) {
+    if (!m_demuxer.open(filePath)) {
         return false;
     }
+    if (!m_decoder.open(m_demuxer.videoCodecParameters(),
+                        m_demuxer.audioCodecParameters(),
+                        m_demuxer.videoTimeBase(),
+                        m_demuxer.audioTimeBase())) {
+        return false;
+    }
+    m_filePath = filePath;
     m_recentFiles.add(filePath);
     m_renderer.setRecentFiles(m_recentFiles.entries());
-    // initWindow must run on the main thread (OS window creation).
     return m_renderer.initWindow("VideoPlayer - " + filePath,
                                  m_decoder.videoWidth(),
                                  m_decoder.videoHeight());
 }
 
-// Runs on the render thread: creates the renderer, decodes and presents frames.
+bool VideoPlayer::reload(const std::string& filePath) {
+    m_demuxer.close();
+    m_decoder.close();
+    if (!m_demuxer.open(filePath)) { return false; }
+    if (!m_decoder.open(m_demuxer.videoCodecParameters(),
+                        m_demuxer.audioCodecParameters(),
+                        m_demuxer.videoTimeBase(),
+                        m_demuxer.audioTimeBase())) {
+        return false;
+    }
+    m_filePath = filePath;
+    m_recentFiles.add(filePath);
+    m_renderer.setRecentFiles(m_recentFiles.entries());
+    return m_renderer.reloadVideo("VideoPlayer - " + filePath,
+                                  m_decoder.videoWidth(),
+                                  m_decoder.videoHeight());
+}
+
+void VideoPlayer::resetState() {
+    m_quit             = false;
+    m_requestOpenFile  = false;
+    m_showExportDialog = false;
+    m_encodingActive   = false;
+}
+
+double VideoPlayer::duration() const {
+    return m_demuxer.duration();
+}
+
+SDL_Renderer* VideoPlayer::sdlRenderer() const {
+    return m_renderer.getSDLRenderer();
+}
+
+std::string VideoPlayer::takePendingOpenPath() {
+    return m_renderer.takePendingOpenPath();
+}
+
+bool VideoPlayer::seek(double seconds) {
+    if (!m_demuxer.seek(seconds)) {
+        return false;
+    }
+    m_decoder.flushBuffers();
+    return true;
+}
+
 void VideoPlayer::renderLoop() {
-    
-    if (!m_renderer.initRenderer()) { 
-        m_quit = true; 
-        return; 
+    if (!m_renderer.initRenderer()) {
+        m_quit = true;
+        return;
     }
 
     const double audioLatency = m_renderer.getAudioLatency();
     const double SEEK_STEP    = SEEK_STEP_SECONDS;
-    const double duration     = m_decoder.duration();
+    const double duration     = m_demuxer.duration();
 
     bool     clocked    = false;
     bool     reclock    = false;
@@ -49,8 +92,14 @@ void VideoPlayer::renderLoop() {
     float    lastSpeed  = 1.0f;
     double   target     = 0.0;
 
+    bool wasSuppress = false;
     while (!m_quit) {
-        PlayerEvent ev = m_renderer.pollEvents();
+        bool inDialog = m_showExportDialog.load();
+        bool suppress = inDialog || m_encodingActive.load();
+        if (suppress) { m_renderer.onActivity(); }
+        PlayerEvent ev = suppress ? PlayerEvent::None : m_renderer.pollEvents();
+        if (!suppress && wasSuppress) { reclock = true; }
+        wasSuppress = suppress;
 
         if (ev == PlayerEvent::Quit) {
             break;
@@ -61,43 +110,43 @@ void VideoPlayer::renderLoop() {
             break;
         }
 
+        if (ev == PlayerEvent::ExportVideo && !inDialog) {
+            m_showExportDialog = true;
+        }
+
         switch (ev) {
             case PlayerEvent::TogglePause:
                 paused = !paused;
-                if (paused) { 
+                if (paused) {
                     m_renderer.pauseAudio();
-                }
-                else { 
-                    m_renderer.resumeAudio(); 
-                    reclock = true; 
+                } else {
+                    m_renderer.resumeAudio();
+                    reclock = true;
                 }
                 break;
 
             case PlayerEvent::SeekForward:
-            case PlayerEvent::SeekBackward: 
+            case PlayerEvent::SeekBackward:
                 target = currentPts + (ev == PlayerEvent::SeekForward ? SEEK_STEP : -SEEK_STEP);
                 target = std::max(0.0, std::min(target, duration));
-                if (m_decoder.seek(target)) {
+                if (seek(target)) {
                     m_renderer.flushAudio();
                     reclock = true;
-
-                    if (paused) { 
-                        paused = false; 
-                        m_renderer.resumeAudio(); 
+                    if (paused) {
+                        paused = false;
+                        m_renderer.resumeAudio();
                     }
                 }
                 break;
             case PlayerEvent::SeekTo:
                 target = m_renderer.getSeekTarget() * duration;
                 target = std::max(0.0, std::min(target, duration));
-                
-                if (m_decoder.seek(target)) {
+                if (seek(target)) {
                     m_renderer.flushAudio();
                     reclock = true;
-
-                    if (paused) { 
-                        paused = false; 
-                        m_renderer.resumeAudio(); 
+                    if (paused) {
+                        paused = false;
+                        m_renderer.resumeAudio();
                     }
                 }
                 break;
@@ -107,13 +156,13 @@ void VideoPlayer::renderLoop() {
             case PlayerEvent::VolumeDown:
                 m_renderer.adjustVolume(-VOLUME_KEY_DELTA);
                 break;
-            case PlayerEvent::ToggleFullscreen: 
-                m_renderer.toggleFullscreen();  
+            case PlayerEvent::ToggleFullscreen:
+                m_renderer.toggleFullscreen();
                 break;
-            case PlayerEvent::SpeedChange:      
-                reclock = true;                 
+            case PlayerEvent::SpeedChange:
+                reclock = true;
                 break;
-            default: 
+            default:
                 break;
         }
 
@@ -127,8 +176,20 @@ void VideoPlayer::renderLoop() {
             continue;
         }
 
+        // Pull packets from the demuxer and feed them to the decoder until
+        // a frame comes out (needed for codecs that buffer across packets).
         DecodedFrame frame;
-        if (!m_decoder.readFrame(frame)) {
+        bool gotFrame = false;
+        AVPacket* pkt = av_packet_alloc();
+        while (!gotFrame) {
+            if (!m_demuxer.readPacket(pkt)) {
+                break;
+            }
+            gotFrame = m_decoder.decode(pkt, m_demuxer.isVideoPacket(pkt), frame);
+        }
+        av_packet_free(&pkt);
+
+        if (!gotFrame) {
             break;
         }
 
@@ -152,8 +213,8 @@ void VideoPlayer::renderLoop() {
             float  speed      = m_renderer.getSpeed();
             double targetWall = (frame.pts - startPts) / speed + audioLatency;
             double wall       = static_cast<double>(SDL_GetTicks() - startTick) / 1000.0;
-            
-            if (targetWall > wall){
+
+            if (targetWall > wall) {
                 SDL_Delay(static_cast<Uint32>((targetWall - wall) * 1000.0));
             }
 
@@ -170,42 +231,4 @@ void VideoPlayer::renderLoop() {
     }
 
     m_quit = true;
-}
-
-void VideoPlayer::run(std::function<std::string()> filePicker) {
-    while (true) {
-        m_quit            = false;
-        m_requestOpenFile = false;
-
-        std::thread rt([this]() { renderLoop(); });
-
-        while (!m_quit) {
-            SDL_PumpEvents();
-            SDL_Delay(1);
-        }
-
-        rt.join();
-
-        if (!m_requestOpenFile) { break; }
-
-        // Check if the user selected a recent file from the menu; otherwise show the picker.
-        std::string newPath = m_renderer.takePendingOpenPath();
-        if (newPath.empty()) {
-            newPath = filePicker();
-        }
-        if (newPath.empty())
-        {
-            continue;
-        } 
-
-        m_decoder.close();
-        if (!m_decoder.open(newPath)) { break; }
-
-        m_recentFiles.add(newPath);
-        m_renderer.setRecentFiles(m_recentFiles.entries());
-
-        if (!m_renderer.reloadVideo("VideoPlayer - " + newPath,
-                                    m_decoder.videoWidth(),
-                                    m_decoder.videoHeight())) break;
-    }
 }

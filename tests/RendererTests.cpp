@@ -2,6 +2,7 @@
 #include <vector>
 #include "Renderer.h"
 #include "Decoder.h"
+#include "Demuxer.h"
 #include "TestConstants.h"
 
 // ── Default state (no SDL init required) ─────────────────────────────────────
@@ -162,11 +163,16 @@ TEST_F(RendererNoVideoTest, QueueAudioAdvancesAudioClock) {
 class RendererSDLTest : public ::testing::Test {
 protected:
     Renderer r;
+    Demuxer  demuxer;
     Decoder  d;
     bool     m_hasAudio = false;
 
     void SetUp() override {
-        ASSERT_TRUE(d.open(TEST_VIDEO_PATH));
+        ASSERT_TRUE(demuxer.open(TEST_VIDEO_PATH));
+        ASSERT_TRUE(d.open(demuxer.videoCodecParameters(),
+                           demuxer.audioCodecParameters(),
+                           demuxer.videoTimeBase(),
+                           demuxer.audioTimeBase()));
         ASSERT_TRUE(r.initWindow("RendererTest", d.videoWidth(), d.videoHeight()));
         ASSERT_TRUE(r.initRenderer());
         m_hasAudio = (r.getAudioClock() != -1.0);
@@ -182,14 +188,21 @@ protected:
         }
     }
 
-    // Decode and return the next video frame, skipping audio-only frames.
+    // Pull packets from the demuxer until a video frame comes out.
     // Caller owns the returned AVFrame and must av_frame_free it.
     AVFrame* nextVideoFrame() {
         for (int i = 0; i < TEST_FRAME_SEARCH_LIMIT; ++i) {
+            AVPacket* pkt = av_packet_alloc();
+            bool gotFrame = false;
             DecodedFrame frame;
-            if (!d.readFrame(frame)) {
-                break;
+            while (!gotFrame) {
+                if (!demuxer.readPacket(pkt)) {
+                    av_packet_free(&pkt);
+                    return nullptr;
+                }
+                gotFrame = d.decode(pkt, demuxer.isVideoPacket(pkt), frame);
             }
+            av_packet_free(&pkt);
             av_frame_free(&frame.audioFrame);
             if (frame.videoFrame) {
                 return frame.videoFrame;
@@ -261,7 +274,7 @@ TEST_F(RendererSDLTest, RenderUIDoesNotCrash) {
                   f->data[1], f->linesize[1],
                   f->data[2], f->linesize[2]);
     av_frame_free(&f);
-    EXPECT_NO_FATAL_FAILURE(r.renderUI(0.0, d.duration(), false));
+    EXPECT_NO_FATAL_FAILURE(r.renderUI(0.0, demuxer.duration(), false));
 }
 
 TEST_F(RendererSDLTest, RenderUIWhilePausedDoesNotCrash) {
@@ -271,7 +284,7 @@ TEST_F(RendererSDLTest, RenderUIWhilePausedDoesNotCrash) {
                   f->data[1], f->linesize[1],
                   f->data[2], f->linesize[2]);
     av_frame_free(&f);
-    EXPECT_NO_FATAL_FAILURE(r.renderUI(0.0, d.duration(), true));
+    EXPECT_NO_FATAL_FAILURE(r.renderUI(0.0, demuxer.duration(), true));
 }
 
 TEST_F(RendererSDLTest, PresentDoesNotCrash) {
@@ -288,10 +301,15 @@ TEST_F(RendererSDLTest, QueueAudioAdvancesAudioClock) {
     SkipIfNoAudio();
     // Decode an audio frame and queue its samples.
     for (int i = 0; i < 32; ++i) {
+        AVPacket* pkt = av_packet_alloc();
         DecodedFrame frame;
-        if (!d.readFrame(frame)) {
-            break;
+        bool gotFrame = false;
+        while (!gotFrame) {
+            if (!demuxer.readPacket(pkt)) { break; }
+            gotFrame = d.decode(pkt, demuxer.isVideoPacket(pkt), frame);
         }
+        av_packet_free(&pkt);
+        if (!gotFrame) { break; }
         av_frame_free(&frame.videoFrame);
         if (frame.audioFrame) {
             AVFrame* f = frame.audioFrame;
