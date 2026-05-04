@@ -41,7 +41,7 @@ static SDL_Texture* loadFolderIconTex(SDL_Renderer* renderer) {
 
 namespace {
     constexpr float PANEL_W    = 400.0f;
-    constexpr float PANEL_H    = 298.0f;
+    constexpr float PANEL_H    = 334.0f;
     constexpr float TITLE_H    = 30.0f;
     constexpr float ROW_H      = 36.0f;
     constexpr float ARROW_W    = 20.0f;
@@ -52,7 +52,7 @@ namespace {
     constexpr float LABEL_X    =  10.0f;
     constexpr float BTN_W      = 100.0f;
     constexpr float BTN_H      =  26.0f;
-    constexpr float BTN_ROW_Y  = 258.0f;
+    constexpr float BTN_ROW_Y  = 294.0f;
 
     const char* CODEC_NAMES[]     = {"H264", "MPEG4"};
     constexpr int CODEC_COUNT     = 2;
@@ -215,62 +215,68 @@ void EncoderSettingsPanel::render(SDL_Renderer* renderer, float W, float H) {
         SDL_RenderDebugText(renderer, px + RNG_TRACK_X + RNG_TRACK_W + 4.0f, midY, endBuf);
     }
 
-    // Output folder row
-    {
-        constexpr float FIELD_X      = 70.0f;
-        constexpr float BROWSE_BTN_W = 26.0f;
-        constexpr float FIELD_W      = PANEL_W - FIELD_X - BROWSE_BTN_W - 14.0f;
+    if (!m_browseIconTex) { m_browseIconTex = loadFolderIconTex(renderer); }
 
-        float rowTopY = py + TITLE_H + 5.0f * ROW_H;
+    constexpr float FIELD_X      = 70.0f;
+    constexpr float BROWSE_BTN_W = 26.0f;
+    constexpr float FIELD_W      = PANEL_W - FIELD_X - BROWSE_BTN_W - 14.0f;
+    constexpr float TEXT_PAD     = 4.0f;
+    constexpr float ICON_SIZE    = 16.0f;
+    int maxChars = static_cast<int>((FIELD_W - TEXT_PAD * 2.0f) / 8.0f);
+
+    auto renderFileRow = [&](const char* label, float rowIndex,
+                             SDL_FRect& fieldRect, SDL_FRect& browseRect,
+                             const std::string& path, bool focused) {
+        float rowTopY = py + TITLE_H + rowIndex * ROW_H;
         float midY    = rowTopY + (ROW_H - 8.0f)   * 0.5f;
         float fieldY  = rowTopY + (ROW_H - ARROW_H) * 0.5f;
 
-        m_folderFieldRect = {px + FIELD_X,                        fieldY, FIELD_W,      ARROW_H};
-        m_browseRect      = {px + FIELD_X + FIELD_W + 4.0f,       fieldY, BROWSE_BTN_W, ARROW_H};
+        fieldRect  = {px + FIELD_X,                      fieldY, FIELD_W,      ARROW_H};
+        browseRect = {px + FIELD_X + FIELD_W + 4.0f,     fieldY, BROWSE_BTN_W, ARROW_H};
 
         SDL_SetRenderDrawColor(renderer, 180, 180, 180, 255);
-        SDL_RenderDebugText(renderer, px + LABEL_X, midY, "Output:");
+        SDL_RenderDebugText(renderer, px + LABEL_X, midY, label);
 
-        // Text field
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(renderer, 20, 20, 20, 240);
-        SDL_RenderFillRect(renderer, &m_folderFieldRect);
+        SDL_RenderFillRect(renderer, &fieldRect);
         SDL_SetRenderDrawColor(renderer,
-            m_folderFocused ? 150 : 80,
-            m_folderFocused ? 150 : 80,
-            m_folderFocused ? 220 : 80, 255);
-        SDL_RenderRect(renderer, &m_folderFieldRect);
+            focused ? 150 : 80, focused ? 150 : 80, focused ? 220 : 80, 255);
+        SDL_RenderRect(renderer, &fieldRect);
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
 
-        constexpr float TEXT_PAD = 4.0f;
-        int maxChars = static_cast<int>((FIELD_W - TEXT_PAD * 2.0f) / 8.0f);
-        std::string display = m_folderPath;
-        if (m_folderFocused) { display += '|'; }
+        std::string display = path;
+        if (focused) { display += '|'; }
         if (static_cast<int>(display.size()) > maxChars) {
             display = display.substr(display.size() - maxChars);
         }
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
         SDL_RenderDebugText(renderer, px + FIELD_X + TEXT_PAD, midY, display.c_str());
 
-        // Browse button
-        if (!m_folderIconTex) { m_folderIconTex = loadFolderIconTex(renderer); }
-        bool browseHov = hitTest(m_mouseX, m_mouseY, m_browseRect);
+        bool browseHov = hitTest(m_mouseX, m_mouseY, browseRect);
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(renderer, 50, 50, 50, browseHov ? 220 : 160);
-        SDL_RenderFillRect(renderer, &m_browseRect);
+        SDL_RenderFillRect(renderer, &browseRect);
         SDL_SetRenderDrawColor(renderer, 100, 100, 100, 200);
-        SDL_RenderRect(renderer, &m_browseRect);
+        SDL_RenderRect(renderer, &browseRect);
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
-        if (m_folderIconTex) {
-            constexpr float ICON_SIZE = 16.0f;
+        if (m_browseIconTex) {
             SDL_FRect iconDst = {
-                m_browseRect.x + (BROWSE_BTN_W - ICON_SIZE) * 0.5f,
-                m_browseRect.y + (ARROW_H       - ICON_SIZE) * 0.5f,
+                browseRect.x + (BROWSE_BTN_W - ICON_SIZE) * 0.5f,
+                browseRect.y + (ARROW_H      - ICON_SIZE) * 0.5f,
                 ICON_SIZE, ICON_SIZE
             };
-            SDL_RenderTexture(renderer, m_folderIconTex, nullptr, &iconDst);
+            SDL_RenderTexture(renderer, m_browseIconTex, nullptr, &iconDst);
         }
-    }
+    };
+
+    renderFileRow("Source:", 5.0f,
+                  m_sourceFieldRect, m_sourceBrowseRect,
+                  m_sourceFilePath, m_sourceFocused);
+
+    renderFileRow("Output:", 6.0f,
+                  m_fileFieldRect, m_outputBrowseRect,
+                  m_filePath, m_fileFocused);
 
     float btnY = py + BTN_ROW_Y;
     m_cancelRect = {px + 20.0f,                   btnY, BTN_W, BTN_H};
@@ -342,8 +348,10 @@ EncoderSettingsPanel::Result EncoderSettingsPanel::handleMouseClick(float mx, fl
         }
     }
 
-    if (hitTest(mx, my, m_browseRect)) { return Result::BrowseFolder; }
-    m_folderFocused = hitTest(mx, my, m_folderFieldRect);
+    if (hitTest(mx, my, m_sourceBrowseRect)) { return Result::BrowseSourceFile; }
+    if (hitTest(mx, my, m_outputBrowseRect)) { return Result::BrowseFile; }
+    m_sourceFocused = hitTest(mx, my, m_sourceFieldRect);
+    m_fileFocused   = hitTest(mx, my, m_fileFieldRect);
     return Result::None;
 }
 
@@ -366,7 +374,7 @@ void EncoderSettingsPanel::handleMouseButtonUp(float /*mx*/, float /*my*/) {
 }
 
 EncoderSettingsPanel::~EncoderSettingsPanel() {
-    if (m_folderIconTex) { SDL_DestroyTexture(m_folderIconTex); }
+    if (m_browseIconTex) { SDL_DestroyTexture(m_browseIconTex); }
 }
 
 void EncoderSettingsPanel::setVideoDuration(double d) {
@@ -375,20 +383,23 @@ void EncoderSettingsPanel::setVideoDuration(double d) {
     m_endValue      = static_cast<float>(d);
 }
 
-void EncoderSettingsPanel::setOutputFolder(const std::string& folder) {
-    m_folderPath = folder;
+void EncoderSettingsPanel::setSourceFilePath(const std::string& filePath) {
+    m_sourceFilePath = filePath;
+}
+
+void EncoderSettingsPanel::setOutputFilePath(const std::string& filePath) {
+    m_filePath = filePath;
 }
 
 void EncoderSettingsPanel::handleTextInput(const char* text) {
-    if (m_folderFocused) {
-        m_folderPath += text;
-    }
+    if (m_sourceFocused) { m_sourceFilePath += text; }
+    if (m_fileFocused)   { m_filePath += text; }
 }
 
 void EncoderSettingsPanel::handleKeyDown(SDL_Keycode key) {
-    if (!m_folderFocused) { return; }
-    if (key == SDLK_BACKSPACE && !m_folderPath.empty()) {
-        m_folderPath.pop_back();
+    if (key == SDLK_BACKSPACE) {
+        if (m_sourceFocused && !m_sourceFilePath.empty()) { m_sourceFilePath.pop_back(); }
+        if (m_fileFocused   && !m_filePath.empty())       { m_filePath.pop_back(); }
     }
 }
 
@@ -406,6 +417,7 @@ EncoderSettings EncoderSettingsPanel::getSettings() const {
     bool isFull        = m_videoDuration <= 0.0 ||
                          m_endValue >= static_cast<float>(m_videoDuration) - 0.5f;
     s.exportDuration   = isFull ? 0.0f : (m_endValue - m_startValue);
-    s.outputFolder     = m_folderPath;
+    s.sourceFilePath   = m_sourceFilePath;
+    s.outputFilePath   = m_filePath;
     return s;
 }

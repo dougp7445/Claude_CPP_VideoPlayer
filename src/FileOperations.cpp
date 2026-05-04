@@ -4,6 +4,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+#include <shellapi.h>
 #include <shobjidl.h>
 #endif
 
@@ -176,5 +177,15 @@ std::string openFolderDialog(const std::string& defaultFolder) {
     return result;
 #else
     return {};
+#endif
+}
+
+void openDirectory(const std::string& path) {
+#ifdef _WIN32
+    int wLen = MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, nullptr, 0);
+    if (wLen <= 0) { return; }
+    std::wstring wPath(wLen - 1, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, wPath.data(), wLen);
+    ShellExecuteW(nullptr, L"explore", wPath.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 #endif
 }

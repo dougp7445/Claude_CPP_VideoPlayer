@@ -13,7 +13,8 @@ struct EncoderSettings {
     int          audioBitRateKbps = 128;
     float        exportStartTime  = 0.0f; // seconds from beginning
     float        exportDuration   = 0.0f; // seconds; 0 = to end of video
-    std::string  outputFolder;
+    std::string  sourceFilePath;
+    std::string  outputFilePath;
 };
 
 #endif // ENCODER_SETTINGS_H
