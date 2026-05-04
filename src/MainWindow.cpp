@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "Constants.h"
 #include "ExportSettingsDialog.h"
 #include "FileOperations.h"
 #include "Logger.h"
@@ -43,13 +44,18 @@ void MainWindow::run(std::function<std::string()> filePicker) {
 }
 
 void MainWindow::runExportDialog() {
-    std::string defaultFolder;
+    std::string defaultFilePath;
     if (!m_player.filePath().empty()) {
-        defaultFolder = std::filesystem::path(m_player.filePath()).parent_path().string();
+        auto p = std::filesystem::path(m_player.filePath());
+        std::string dir = m_player.lastExportDir().empty()
+            ? p.parent_path().string()
+            : m_player.lastExportDir();
+        defaultFilePath = (std::filesystem::path(dir) /
+            (p.stem().string() + EXPORT_DEFAULT_STEM_SUFFIX + "." + EXPORT_DEFAULT_EXTENSION)).string();
     }
     EncoderSettings settings;
     if (showExportDialog(m_player.sdlRenderer(), m_player.duration(),
-                         defaultFolder, m_player.quit(), settings)) {
+                         defaultFilePath, m_player.quit(), settings)) {
         m_exportSettings = settings;
         m_requestExport  = true;
     }
@@ -60,14 +66,16 @@ void MainWindow::runExportProgress() {
     std::string ext = (m_exportSettings.outputFormat == EncoderSettings::OutputFormat::TS)
         ? "ts" : "mp4";
 
-    std::string savePath;
-    if (!m_exportSettings.outputFolder.empty()) {
-        std::string stem = std::filesystem::path(m_player.filePath()).stem().string();
-        savePath = (std::filesystem::path(m_exportSettings.outputFolder) /
-                    (stem + "_export." + ext)).string();
-        std::filesystem::create_directories(m_exportSettings.outputFolder);
-    } else {
+    std::string savePath = m_exportSettings.outputFilePath;
+    if (savePath.empty()) {
         savePath = saveFileDialog(ext);
+    }
+    if (!savePath.empty()) {
+        auto parent = std::filesystem::path(savePath).parent_path();
+        if (!parent.empty()) {
+            std::filesystem::create_directories(parent);
+            m_player.setLastExportDir(parent.string());
+        }
     }
     if (savePath.empty()) { return; }
 

@@ -6,7 +6,7 @@
 #include <string>
 
 VideoPlayer::VideoPlayer()
-    : m_recentFiles(executableDir() + "recent_files.json")
+    : m_settings(executableDir() + SETTINGS_FILENAME)
 {}
 VideoPlayer::~VideoPlayer() = default;
 
@@ -21,8 +21,8 @@ bool VideoPlayer::load(const std::string& filePath) {
         return false;
     }
     m_filePath = filePath;
-    m_recentFiles.add(filePath);
-    m_renderer.setRecentFiles(m_recentFiles.entries());
+    m_settings.addRecentFile(filePath);
+    m_renderer.setRecentFiles(m_settings.recentFiles());
     return m_renderer.initWindow("VideoPlayer - " + filePath,
                                  m_decoder.videoWidth(),
                                  m_decoder.videoHeight());
@@ -39,8 +39,8 @@ bool VideoPlayer::reload(const std::string& filePath) {
         return false;
     }
     m_filePath = filePath;
-    m_recentFiles.add(filePath);
-    m_renderer.setRecentFiles(m_recentFiles.entries());
+    m_settings.addRecentFile(filePath);
+    m_renderer.setRecentFiles(m_settings.recentFiles());
     return m_renderer.reloadVideo("VideoPlayer - " + filePath,
                                   m_decoder.videoWidth(),
                                   m_decoder.videoHeight());

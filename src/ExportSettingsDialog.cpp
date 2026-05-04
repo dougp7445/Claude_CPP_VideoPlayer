@@ -1,10 +1,10 @@
 #include "ExportSettingsDialog.h"
 #include "FileOperations.h"
 
-ExportSettingsDialog::ExportSettingsDialog(double videoDuration, const std::string& defaultFolder)
+ExportSettingsDialog::ExportSettingsDialog(double videoDuration, const std::string& defaultFilePath)
     : DialogWindow("Export Settings", 400, 298) {
     m_panel.setVideoDuration(videoDuration);
-    m_panel.setOutputFolder(defaultFolder);
+    m_panel.setOutputFilePath(defaultFilePath);
 }
 
 void ExportSettingsDialog::onRender(SDL_Renderer* renderer, float w, float h) {
@@ -22,10 +22,12 @@ void ExportSettingsDialog::onMouseButtonDown(float x, float y) {
         close();
     } else if (r == EncoderSettingsPanel::Result::Cancel) {
         close();
-    } else if (r == EncoderSettingsPanel::Result::BrowseFolder) {
-        std::string folder = openFolderDialog(m_panel.getSettings().outputFolder);
-        if (!folder.empty()) {
-            m_panel.setOutputFolder(folder);
+    } else if (r == EncoderSettingsPanel::Result::BrowseFile) {
+        std::string ext = (m_panel.getSettings().outputFormat == EncoderSettings::OutputFormat::TS)
+            ? "ts" : "mp4";
+        std::string filePath = saveFileDialog(ext);
+        if (!filePath.empty()) {
+            m_panel.setOutputFilePath(filePath);
         }
     }
 }
@@ -44,10 +46,10 @@ void ExportSettingsDialog::onKeyDown(SDL_Keycode key) {
 
 bool showExportDialog(SDL_Renderer*      mainRenderer,
                       double             videoDuration,
-                      const std::string& defaultFolder,
+                      const std::string& defaultFilePath,
                       std::atomic<bool>& quit,
                       EncoderSettings&   outSettings) {
-    ExportSettingsDialog dlg(videoDuration, defaultFolder);
+    ExportSettingsDialog dlg(videoDuration, defaultFilePath);
     dlg.run(mainRenderer, quit);
     if (dlg.wasExported()) {
         outSettings = dlg.getSettings();

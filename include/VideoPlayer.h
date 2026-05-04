@@ -4,7 +4,7 @@
 #include "Decoder.h"
 #include "Demuxer.h"
 #include "Renderer.h"
-#include "RecentFiles.h"
+#include "AppSettings.h"
 #include <atomic>
 #include <string>
 
@@ -24,6 +24,9 @@ public:
     void clearWantsExportDialog()                    { m_showExportDialog = false; }
     void setEncodingActive(bool v)                   { m_encodingActive = v; }
 
+    const std::string& lastExportDir() const         { return m_settings.lastExportDir(); }
+    void setLastExportDir(const std::string& dir)    { m_settings.setLastExportDir(dir); }
+
     const std::string& filePath()    const           { return m_filePath; }
     double             duration()    const;
     SDL_Renderer*      sdlRenderer() const;
@@ -36,7 +39,7 @@ private:
     Decoder     m_decoder;
     Renderer    m_renderer;
     std::string m_filePath;
-    RecentFiles m_recentFiles;
+    AppSettings m_settings;
 
     std::atomic<bool> m_quit{false};
     std::atomic<bool> m_requestOpenFile{false};

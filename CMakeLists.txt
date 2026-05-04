@@ -25,7 +25,7 @@ add_executable(VideoPlayer
     src/Logger.cpp
     src/MenuUI.cpp
     src/PlayerUI.cpp
-    src/RecentFiles.cpp
+    src/AppSettings.cpp
     src/Renderer.cpp
     src/VideoPlayer.cpp
 )

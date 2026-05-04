@@ -77,6 +77,13 @@ static constexpr int BITRATE_4K_HIGH     = 45000000; // 45.0 Mbps
 // ── Bitrate conversion ────────────────────────────────────────────────────────
 static constexpr int KBPS_TO_BPS = 1000;
 
+// ── Settings file ─────────────────────────────────────────────────────────────
+static constexpr const char* SETTINGS_FILENAME         = "AppSettings.json";
+
+// ── Export defaults ───────────────────────────────────────────────────────────
+static constexpr const char* EXPORT_DEFAULT_STEM_SUFFIX = "_export";
+static constexpr const char* EXPORT_DEFAULT_EXTENSION   = "mp4";
+
 // ── Video encoding ────────────────────────────────────────────────────────────
 static constexpr int         ENC_DEFAULT_VIDEO_BITRATE_KBPS = 2000;
 static constexpr const char* CODEC_H264         = "libx264";
