@@ -51,8 +51,8 @@ bool Muxer::beginFile() {
 
 bool Muxer::startAsync(LockingQueue<AVPacket*>& queue) {
     Logger::instance().debug("Muxer: starting write thread");
-    m_queue = &queue;
-    m_writeThread = std::thread([this, &queue] {
+    m_videoPacketQueue = &queue;
+    m_videoWriteThread = std::thread([this, &queue] {
         AVPacket* pkt = nullptr;
         while (queue.pop(pkt)) {
             writePacket(pkt);
@@ -65,8 +65,8 @@ bool Muxer::startAsync(LockingQueue<AVPacket*>& queue) {
 
 bool Muxer::startAsync(LockingQueue<AVPacket*>& videoQueue, LockingQueue<AVPacket*>& audioQueue) {
     Logger::instance().debug("Muxer: starting video and audio write threads");
-    m_queue  = &videoQueue;
-    m_queue2 = &audioQueue;
+    m_videoPacketQueue  = &videoQueue;
+    m_audioPacketQueue = &audioQueue;
     auto drain = [this](LockingQueue<AVPacket*>& q) {
         AVPacket* pkt = nullptr;
         while (q.pop(pkt)) {
@@ -76,8 +76,8 @@ bool Muxer::startAsync(LockingQueue<AVPacket*>& videoQueue, LockingQueue<AVPacke
         }
         Logger::instance().debug("Muxer: write thread finished");
     };
-    m_writeThread  = std::thread(drain, std::ref(videoQueue));
-    m_writeThread2 = std::thread(drain, std::ref(audioQueue));
+    m_videoWriteThread  = std::thread(drain, std::ref(videoQueue));
+    m_audioWriteThread = std::thread(drain, std::ref(audioQueue));
     return true;
 }
 
@@ -99,8 +99,8 @@ bool Muxer::endFile() {
     if (!m_fmtCtx) {
         return false;
     }
-    if (m_writeThread.joinable())  { m_writeThread.join(); }
-    if (m_writeThread2.joinable()) { m_writeThread2.join(); }
+    if (m_videoWriteThread.joinable())  { m_videoWriteThread.join(); }
+    if (m_audioWriteThread.joinable()) { m_audioWriteThread.join(); }
     Logger::instance().debug("Muxer: writing container trailer");
     av_write_trailer(m_fmtCtx);
     if (!(m_fmtCtx->oformat->flags & AVFMT_NOFILE)) {
@@ -111,10 +111,10 @@ bool Muxer::endFile() {
 }
 
 void Muxer::close() {
-    if (m_queue)  { m_queue->close(); }
-    if (m_queue2) { m_queue2->close(); }
-    if (m_writeThread.joinable())  { m_writeThread.join(); }
-    if (m_writeThread2.joinable()) { m_writeThread2.join(); }
+    if (m_videoPacketQueue)  { m_videoPacketQueue->close(); }
+    if (m_audioPacketQueue) { m_audioPacketQueue->close(); }
+    if (m_videoWriteThread.joinable())  { m_videoWriteThread.join(); }
+    if (m_audioWriteThread.joinable()) { m_audioWriteThread.join(); }
     if (m_fmtCtx) {
         Logger::instance().debug("Muxer: closing");
         if (!(m_fmtCtx->oformat->flags & AVFMT_NOFILE) && m_fmtCtx->pb) {
@@ -123,5 +123,5 @@ void Muxer::close() {
         avformat_free_context(m_fmtCtx);
         m_fmtCtx = nullptr;
     }
-    m_queue = nullptr;
+    m_videoPacketQueue = nullptr;
 }
