@@ -2,69 +2,94 @@
 
 ---
 
-## Branch: 04-26-2026-Logging
+## Branch: 5-3-2026-UpdateEncoderSettingsPanel
 
 ### Prompt 1
-> Create a class called Logger.cpp with logging functions
+> Update encoder settings panel to allow the user to choose a video file
 
 #### Files Modified
-- `include/Logger.h` — created singleton Logger with Debug/Info/Warning/Error levels, `init()`, and level methods
-- `src/Logger.cpp` — implemented singleton, timestamped log entries, file + console output, mutex thread safety
-- `CMakeLists.txt` — added `src/Logger.cpp` to VideoPlayer sources
-- `tests/CMakeLists.txt` — added `../src/Logger.cpp` to RendererTests and VideoPlayerTests
+- `include/EncoderSettings.h` — renamed `outputFolder` → `outputFilePath`
+- `include/EncoderSettingsPanel.h` — renamed `BrowseFolder` → `BrowseFile` in Result enum; `setOutputFolder` → `setOutputFilePath`; internal members renamed (`m_folderPath` → `m_filePath`, `m_folderFocused` → `m_fileFocused`, `m_folderFieldRect` → `m_fileFieldRect`, `m_folderIconTex` → `m_browseIconTex`)
+- `src/EncoderSettingsPanel.cpp` — updated all renamed members; browse returns `Result::BrowseFile`; `getSettings()` sets `outputFilePath`
+- `include/ExportSettingsDialog.h` — `defaultFolder` → `defaultFilePath` in constructor and `showExportDialog`
+- `src/ExportSettingsDialog.cpp` — `BrowseFile` calls `saveFileDialog(ext)` using current output format; updated `showExportDialog` signature
+- `src/MainWindow.cpp` — `runExportDialog()` seeds default path with source stem + `_export.mp4`; `runExportProgress()` uses `outputFilePath` directly with `saveFileDialog` fallback; creates parent directories
 
 ### Prompt 2
-> Add logging for errors
+> Update encoder settings panel to use last used export directory
 
 #### Files Modified
-- `src/Decoder.cpp` — replaced 5 `std::cerr` calls with `Logger::instance().error()`; swapped `<iostream>` for `"Logger.h"`
-- `src/Renderer.cpp` — replaced 5 `std::cerr` and 1 `std::cout` with Logger calls; swapped `<iostream>` for `"Logger.h"`
-- `src/main.cpp` — replaced `std::cerr` with `Logger::instance().error()`; swapped `<iostream>` for `"Logger.h"`
-- `tests/CMakeLists.txt` — added `../src/Logger.cpp` to DecoderTests (now required after Decoder.cpp uses Logger)
+- `include/MainWindow.h` — added `m_lastExportDir`
+- `src/MainWindow.cpp` — constructor loads `export_dir.txt`; `runExportDialog()` prefers `m_lastExportDir` when building default path; `runExportProgress()` saves parent directory to `export_dir.txt` after path is confirmed
 
 ### Prompt 3
-> Set the file path for the logger to be located in a folder called Log in the folder with the executable when running.
+> Combine export_dir.txt and recent_files.json into a single json file called VideoPlayerSettings.json
 
 #### Files Modified
-- `src/Logger.cpp` — added `std::filesystem::create_directories` in `init()` to create the log directory if missing
-- `src/main.cpp` — added `Logger::instance().init()` call using `executableDir() + "Log\\video_player.log"`
+- `include/AppSettings.h` — created; replaces `RecentFiles`, adds `lastExportDir` with getter/setter
+- `src/AppSettings.cpp` — created; reads/writes `VideoPlayerSettings.json` with `recentFiles` array and `lastExportDir` string
+- `include/RecentFiles.h` — deleted
+- `src/RecentFiles.cpp` — deleted
+- `include/VideoPlayer.h` — `RecentFiles m_recentFiles` → `AppSettings m_settings`; added `lastExportDir()` and `setLastExportDir()` pass-throughs
+- `src/VideoPlayer.cpp` — updated to use `m_settings`; file path → `VideoPlayerSettings.json`
+- `include/MainWindow.h` — removed `m_lastExportDir`
+- `src/MainWindow.cpp` — removed file I/O; delegates to `m_player.lastExportDir()` / `m_player.setLastExportDir()`
+- `CMakeLists.txt` — `RecentFiles.cpp` → `AppSettings.cpp`
+- `tests/CMakeLists.txt` — `RecentFiles.cpp` → `AppSettings.cpp`
 
 ### Prompt 4
-> Include the day, month, year, hour, and minute in the name of the log file
+> Rename VideoPlayerSettings to AppSettings
 
 #### Files Modified
-- `src/main.cpp` — build timestamped filename `video_player_DD-MM-YYYY_HH-MM.log` using `<chrono>`/`<ctime>` before calling `init()`
+- `src/VideoPlayer.cpp` — filename changed from `VideoPlayerSettings.json` to `AppSettings.json`
 
 ### Prompt 5
-> Have an option in the Logger.cpp to set how many log files to keep in the Log folder. Default of 10
+> Update recent changes to use constants for default values such as file names
 
 #### Files Modified
-- `include/Logger.h` — added `int maxFiles = 10` parameter to `init()`
-- `src/Logger.cpp` — added pruning logic in `init()`: scans log directory, sorts by modification time, deletes oldest files beyond `maxFiles`; added `<algorithm>` and `<vector>` includes
+- `include/Constants.h` — added `SETTINGS_FILENAME`, `EXPORT_DEFAULT_STEM_SUFFIX`, `EXPORT_DEFAULT_EXTENSION`
+- `src/VideoPlayer.cpp` — `"AppSettings.json"` → `SETTINGS_FILENAME`
+- `src/MainWindow.cpp` — added `#include "Constants.h"`; `"_export.mp4"` → `EXPORT_DEFAULT_STEM_SUFFIX + "." + EXPORT_DEFAULT_EXTENSION`
 
 ### Prompt 6
-> Add tests for the logger
+> Make constants for json keys in AppSettings
 
 #### Files Modified
-- `src/Logger.cpp` — added `m_file.close()` at start of `init()` so tests can reinitialize the singleton cleanly
-- `tests/LoggerTests.cpp` — created with 12 tests covering: singleton identity, file/directory creation, all log levels written to file, level tags, `minLevel` filtering, pruning count, pruning deletes oldest, `maxFiles=0` disables pruning
-- `tests/CMakeLists.txt` — added LoggerTests target; moved `include(GoogleTest)` to after `FetchContent_MakeAvailable` so it applies to all targets
+- `src/AppSettings.cpp` — added file-local `KEY_RECENT_FILES` and `KEY_LAST_EXPORT_DIR` constants; replaced all literal key strings
 
 ### Prompt 7
-> Add trace logs, including tests
+> Create a file called JsonConstants.h that holds all constants pertaining to json and have AppSettings use it
 
 #### Files Modified
-- `include/Logger.h` — added `Trace` to Level enum (below Debug), added `trace()` declaration
-- `src/Logger.cpp` — implemented `trace()`, added `"TRACE"` case to `levelTag()`
-- `tests/LoggerTests.cpp` — added `TraceMessageWrittenToFile`, `TraceTagPresentInOutput`, `DefaultMinLevelFiltersTrace`
+- `include/JsonConstants.h` — created with `KEY_RECENT_FILES` and `KEY_LAST_EXPORT_DIR`
+- `src/AppSettings.cpp` — added `#include "JsonConstants.h"`; removed local key constant definitions
 
 ### Prompt 8
-> Check logger tests and see if trace needs to be added
+> Allow the user to select a video file to export in the encoder settings panel
 
 #### Files Modified
-- `tests/LoggerTests.cpp` — added `trace()` call to `MinLevelFiltersLowerMessages` test (trace was the only level missing from that filter check)
+- `include/EncoderSettings.h` — added `sourceFilePath` field
+- `include/EncoderSettingsPanel.h` — added `Result::BrowseSourceFile`; added `setSourceFilePath()`; added `m_sourceFilePath`, `m_sourceFocused`, `m_sourceFieldRect`, `m_sourceBrowseRect`; renamed `m_browseRect` → `m_outputBrowseRect`
+- `src/EncoderSettingsPanel.cpp` — panel height 298 → 334, `BTN_ROW_Y` 258 → 294; "Source:" row at index 5, "Output:" shifted to index 6; extracted `renderFileRow` lambda; updated click, text input, key, and `getSettings()` handlers; added `setSourceFilePath()`
+- `include/ExportSettingsDialog.h` — added `defaultSourceFilePath` to constructor and `showExportDialog`
+- `src/ExportSettingsDialog.cpp` — passes source path to panel; `BrowseSourceFile` calls `openFileDialog()`
+- `src/MainWindow.cpp` — passes `m_player.filePath()` as default source; uses `sourceFilePath` as export input with fallback to loaded file
 
 ### Prompt 9
-> Update Prompts file based on changes to current branch 04-26-2026-Logging. Include this prompt.
+> Update the duration in the encoder settings panel when a new video is selected
+
+#### Files Modified
+- `src/ExportSettingsDialog.cpp` — added `#include "Demuxer.h"`; after `BrowseSourceFile`, opens a `Demuxer` to read the new file's duration and calls `m_panel.setVideoDuration()`
+
+### Prompt 10
+> Open the directory the file is exported to once complete
+
+#### Files Modified
+- `include/FileOperations.h` — declared `openDirectory(const std::string& path)`
+- `src/FileOperations.cpp` — added `#include <shellapi.h>`; implemented `openDirectory()` using `ShellExecuteW` with `"explore"` verb
+- `src/MainWindow.cpp` — calls `openDirectory(parent_path(savePath))` after a successful non-cancelled export
+
+### Prompt 11
+> Update Prompts file based on changes to current branch 5-3-2026-UpdateEncoderSettingsPanel. Include this prompt.
 
 #### No edits
