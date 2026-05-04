@@ -33,17 +33,7 @@ TEST(DecoderTest, DefaultDimensionsAreZero) {
     EXPECT_EQ(d.videoHeight(), 0);
 }
 
-TEST(DecoderTest, DefaultDurationIsZero) {
-    Demuxer demuxer;
-    EXPECT_DOUBLE_EQ(demuxer.duration(), 0.0);
-}
-
 // ── open() ────────────────────────────────────────────────────────────────────
-
-TEST(DecoderTest, OpenInvalidFileReturnsFalse) {
-    Demuxer demuxer;
-    EXPECT_FALSE(demuxer.open("nonexistent_file.mp4"));
-}
 
 TEST(DecoderTest, OpenValidFileReturnsTrue) {
     Demuxer demuxer;
@@ -57,12 +47,6 @@ TEST(DecoderTest, OpenValidFilePopulatesDimensions) {
     ASSERT_TRUE(openPair(TEST_VIDEO_PATH, demuxer, d));
     EXPECT_GT(d.videoWidth(),  0);
     EXPECT_GT(d.videoHeight(), 0);
-}
-
-TEST(DecoderTest, OpenValidFilePopulatesDuration) {
-    Demuxer demuxer;
-    ASSERT_TRUE(demuxer.open(TEST_VIDEO_PATH));
-    EXPECT_GT(demuxer.duration(), 0.0);
 }
 
 // ── readFrame() ───────────────────────────────────────────────────────────────
@@ -161,4 +145,61 @@ TEST(DecoderTest, SeekAndReadContinuesAfterSeek) {
     EXPECT_TRUE(readFrame(demuxer, d, frame));
     av_frame_free(&frame.videoFrame);
     av_frame_free(&frame.audioFrame);
+}
+
+// ── Decoder async ─────────────────────────────────────────────────────────────
+
+TEST(DecoderTest, AsyncProducesVideoFrames) {
+    Demuxer demuxer;
+    Decoder d;
+    ASSERT_TRUE(openPair(TEST_VIDEO_PATH, demuxer, d));
+
+    AVPacket* pkt = av_packet_alloc();
+    for (int i = 0; i < 100; ++i) {
+        if (!demuxer.readPacket(pkt)) { break; }
+        AVPacket* copy = av_packet_alloc();
+        av_packet_move_ref(copy, pkt);
+        demuxer.outputQueue().push(copy);
+    }
+    av_packet_free(&pkt);
+    demuxer.outputQueue().close();
+
+    int videoFrames = 0;
+    d.startAsync(demuxer.videoStreamIndex(), demuxer.outputQueue(),
+        [&](DecodedFrame& frame) -> bool {
+            if (frame.videoFrame) { ++videoFrames; }
+            av_frame_free(&frame.videoFrame);
+            av_frame_free(&frame.audioFrame);
+            return true;
+        });
+    d.waitDone();
+    EXPECT_GT(videoFrames, 0);
+}
+
+TEST(DecoderTest, AsyncFilterStopsEarlyClosesOutputQueues) {
+    Demuxer demuxer;
+    Decoder d;
+    ASSERT_TRUE(openPair(TEST_VIDEO_PATH, demuxer, d));
+
+    AVPacket* pkt = av_packet_alloc();
+    for (int i = 0; i < 200; ++i) {
+        if (!demuxer.readPacket(pkt)) { break; }
+        AVPacket* copy = av_packet_alloc();
+        av_packet_move_ref(copy, pkt);
+        demuxer.outputQueue().push(copy);
+    }
+    av_packet_free(&pkt);
+    demuxer.outputQueue().close();
+
+    int framesSeen = 0;
+    d.startAsync(demuxer.videoStreamIndex(), demuxer.outputQueue(),
+        [&](DecodedFrame& frame) -> bool {
+            av_frame_free(&frame.videoFrame);
+            av_frame_free(&frame.audioFrame);
+            return ++framesSeen < 3;
+        });
+    d.waitDone();
+
+    AVFrame* f = nullptr;
+    EXPECT_FALSE(d.videoOutputQueue().pop(f));
 }
