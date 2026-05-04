@@ -55,7 +55,8 @@ void MainWindow::runExportDialog() {
     }
     EncoderSettings settings;
     if (showExportDialog(m_player.sdlRenderer(), m_player.duration(),
-                         defaultFilePath, m_player.quit(), settings)) {
+                         m_player.filePath(), defaultFilePath,
+                         m_player.quit(), settings)) {
         m_exportSettings = settings;
         m_requestExport  = true;
     }
@@ -79,7 +80,10 @@ void MainWindow::runExportProgress() {
     }
     if (savePath.empty()) { return; }
 
-    m_exporter.start(m_player.filePath(), savePath, m_exportSettings);
+    std::string inputPath = m_exportSettings.sourceFilePath.empty()
+        ? m_player.filePath()
+        : m_exportSettings.sourceFilePath;
+    m_exporter.start(inputPath, savePath, m_exportSettings);
     m_player.setEncodingActive(true);
 
     SDL_Window*   mainWin   = SDL_GetRenderWindow(m_player.sdlRenderer());
@@ -192,5 +196,7 @@ void MainWindow::runExportProgress() {
     if (m_exporter.cancelled()) {
         std::filesystem::remove(savePath);
         Logger::instance().info("MainWindow: export cancelled, partial file removed");
+    } else {
+        openDirectory(std::filesystem::path(savePath).parent_path().string());
     }
 }

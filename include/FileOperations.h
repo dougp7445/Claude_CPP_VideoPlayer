@@ -20,4 +20,7 @@ std::string saveFileDialog(const std::string& extension = "mp4");
 // Returns the selected folder path, or an empty string if canceled.
 std::string openFolderDialog(const std::string& defaultFolder = "");
 
+// Opens path in the platform's file explorer.
+void openDirectory(const std::string& path);
+
 #endif // FILE_OPERATIONS_H

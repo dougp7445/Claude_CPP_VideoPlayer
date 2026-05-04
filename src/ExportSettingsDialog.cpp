@@ -1,9 +1,13 @@
 #include "ExportSettingsDialog.h"
+#include "Demuxer.h"
 #include "FileOperations.h"
 
-ExportSettingsDialog::ExportSettingsDialog(double videoDuration, const std::string& defaultFilePath)
-    : DialogWindow("Export Settings", 400, 298) {
+ExportSettingsDialog::ExportSettingsDialog(double videoDuration,
+                                           const std::string& defaultSourceFilePath,
+                                           const std::string& defaultFilePath)
+    : DialogWindow("Export Settings", 400, 334) {
     m_panel.setVideoDuration(videoDuration);
+    m_panel.setSourceFilePath(defaultSourceFilePath);
     m_panel.setOutputFilePath(defaultFilePath);
 }
 
@@ -22,6 +26,15 @@ void ExportSettingsDialog::onMouseButtonDown(float x, float y) {
         close();
     } else if (r == EncoderSettingsPanel::Result::Cancel) {
         close();
+    } else if (r == EncoderSettingsPanel::Result::BrowseSourceFile) {
+        std::string filePath = openFileDialog();
+        if (!filePath.empty()) {
+            m_panel.setSourceFilePath(filePath);
+            Demuxer demuxer;
+            if (demuxer.open(filePath)) {
+                m_panel.setVideoDuration(demuxer.duration());
+            }
+        }
     } else if (r == EncoderSettingsPanel::Result::BrowseFile) {
         std::string ext = (m_panel.getSettings().outputFormat == EncoderSettings::OutputFormat::TS)
             ? "ts" : "mp4";
@@ -46,10 +59,11 @@ void ExportSettingsDialog::onKeyDown(SDL_Keycode key) {
 
 bool showExportDialog(SDL_Renderer*      mainRenderer,
                       double             videoDuration,
+                      const std::string& defaultSourceFilePath,
                       const std::string& defaultFilePath,
                       std::atomic<bool>& quit,
                       EncoderSettings&   outSettings) {
-    ExportSettingsDialog dlg(videoDuration, defaultFilePath);
+    ExportSettingsDialog dlg(videoDuration, defaultSourceFilePath, defaultFilePath);
     dlg.run(mainRenderer, quit);
     if (dlg.wasExported()) {
         outSettings = dlg.getSettings();

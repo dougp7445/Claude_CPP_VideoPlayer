@@ -7,7 +7,7 @@
 
 class EncoderSettingsPanel {
 public:
-    enum class Result { None, Cancel, Export, BrowseFile };
+    enum class Result { None, Cancel, Export, BrowseSourceFile, BrowseFile };
 
     ~EncoderSettingsPanel();
 
@@ -16,6 +16,7 @@ public:
     void   handleMouseMotion(float mx, float my);
     void   handleMouseButtonUp(float mx, float my);
     void   setVideoDuration(double d);
+    void   setSourceFilePath(const std::string& filePath);
     void   setOutputFilePath(const std::string& filePath);
     void   handleTextInput(const char* text);
     void   handleKeyDown(SDL_Keycode key);
@@ -48,15 +49,19 @@ private:
     SDL_FRect   m_rangeTrack       = {};
     SDL_FRect   m_startThumb       = {};
     SDL_FRect   m_endThumb         = {};
-    SDL_FRect   m_fileFieldRect    = {};
-    SDL_FRect   m_browseRect       = {};
-    SDL_FRect   m_cancelRect       = {};
-    SDL_FRect   m_exportRect       = {};
+    SDL_FRect   m_sourceFieldRect   = {};
+    SDL_FRect   m_sourceBrowseRect  = {};
+    SDL_FRect   m_fileFieldRect     = {};
+    SDL_FRect   m_outputBrowseRect  = {};
+    SDL_FRect   m_cancelRect        = {};
+    SDL_FRect   m_exportRect        = {};
 
-    SDL_Texture* m_browseIconTex   = nullptr;
+    SDL_Texture* m_browseIconTex    = nullptr;
 
+    std::string m_sourceFilePath;
+    bool        m_sourceFocused     = false;
     std::string m_filePath;
-    bool        m_fileFocused      = false;
+    bool        m_fileFocused       = false;
 };
 
 #endif // ENCODER_SETTINGS_PANEL_H

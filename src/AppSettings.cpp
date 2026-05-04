@@ -1,4 +1,5 @@
 #include "AppSettings.h"
+#include "JsonConstants.h"
 #include <algorithm>
 #include <fstream>
 
@@ -77,7 +78,7 @@ void AppSettings::load() {
     std::string content((std::istreambuf_iterator<char>(f)),
                          std::istreambuf_iterator<char>());
 
-    size_t recentKey = content.find("\"recentFiles\"");
+    size_t recentKey = content.find(std::string("\"") + KEY_RECENT_FILES + "\"");
     if (recentKey != std::string::npos) {
         size_t arrayStart = content.find('[', recentKey);
         size_t arrayEnd   = content.find(']', arrayStart != std::string::npos ? arrayStart : 0);
@@ -97,7 +98,7 @@ void AppSettings::load() {
         }
     }
 
-    size_t exportKey = content.find("\"lastExportDir\"");
+    size_t exportKey = content.find(std::string("\"") + KEY_LAST_EXPORT_DIR + "\"");
     if (exportKey != std::string::npos) {
         size_t colon    = content.find(':', exportKey);
         size_t strOpen  = colon != std::string::npos ? content.find('"', colon) : std::string::npos;
@@ -111,13 +112,13 @@ void AppSettings::load() {
 void AppSettings::save() const {
     std::ofstream f(m_filePath);
     f << "{\n";
-    f << "    \"recentFiles\": [\n";
+    f << "    \"" << KEY_RECENT_FILES << "\": [\n";
     for (size_t i = 0; i < m_recentFiles.size(); ++i) {
         f << "        \"" << jsonEscape(m_recentFiles[i]) << '"';
         if (i + 1 < m_recentFiles.size()) { f << ','; }
         f << '\n';
     }
     f << "    ],\n";
-    f << "    \"lastExportDir\": \"" << jsonEscape(m_lastExportDir) << "\"\n";
+    f << "    \"" << KEY_LAST_EXPORT_DIR << "\": \"" << jsonEscape(m_lastExportDir) << "\"\n";
     f << "}\n";
 }

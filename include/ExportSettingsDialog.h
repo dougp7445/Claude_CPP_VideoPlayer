@@ -10,7 +10,9 @@
 
 class ExportSettingsDialog : public DialogWindow {
 public:
-    ExportSettingsDialog(double videoDuration, const std::string& defaultFilePath);
+    ExportSettingsDialog(double videoDuration,
+                         const std::string& defaultSourceFilePath,
+                         const std::string& defaultFilePath);
 
     bool            wasExported() const { return m_exported; }
     EncoderSettings getSettings()  const { return m_panel.getSettings(); }
@@ -31,6 +33,7 @@ private:
 // Convenience wrapper: opens the dialog and returns true if the user exported.
 bool showExportDialog(SDL_Renderer*      mainRenderer,
                       double             videoDuration,
+                      const std::string& defaultSourceFilePath,
                       const std::string& defaultFilePath,
                       std::atomic<bool>& quit,
                       EncoderSettings&   outSettings);
