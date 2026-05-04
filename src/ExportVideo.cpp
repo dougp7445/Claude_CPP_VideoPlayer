@@ -1,5 +1,6 @@
 #include "ExportVideo.h"
 #include "AudioEncoder.h"
+#include "Constants.h"
 #include "Decoder.h"
 #include "Demuxer.h"
 #include "Logger.h"
@@ -60,8 +61,8 @@ void ExportVideo::run(const std::string& inputPath,
     decoder.flushBuffers();
 
     bool hasAudio   = demuxer.hasAudio();
-    int  sampleRate = hasAudio ? 44100 : 0;
-    int  channels   = hasAudio ? 2 : 0;
+    int  sampleRate = hasAudio ? SAMPLE_RATE_44K   : 0;
+    int  channels   = hasAudio ? CHANNELS_STEREO   : 0;
     bool preferH264 = settings.videoCodec == EncoderSettings::VideoCodec::H264;
 
     Muxer muxer;
