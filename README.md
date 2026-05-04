@@ -67,13 +67,27 @@ If no file argument is provided, a native Windows file picker dialog opens autom
 
 ### Testing
 
-Build first, then run the unit tests with:
+Build first, then run all unit tests with:
 
 ```bash
 bash runTests.sh
 ```
 
-This runs all GoogleTests via CTest and prints output only for failing tests. GoogleTest is downloaded automatically at CMake configure time — no manual setup needed.
+This runs all GoogleTest suites via CTest and prints output only for failing tests. GoogleTest is downloaded automatically at CMake configure time — no manual setup needed.
+
+Individual test binaries (in `build/tests/Debug/` or `build/tests/Release/`):
+
+| Binary | Covers |
+|---|---|
+| `DemuxerTests.exe` | `Demuxer` — open, stream detection, packet reading, EOF |
+| `DecoderTests.exe` | `Decoder` — codec open, frame decoding, seek, async path |
+| `VideoEncoderTests.exe` | `VideoEncoder` + `Muxer` — lifecycle, frame writing, file output, async |
+| `AudioEncoderTests.exe` | `AudioEncoder` — lifecycle, frame writing, async |
+| `MuxerTests.exe` | `Muxer` — open, stream registration, beginFile/endFile |
+| `LoggerTests.exe` | `Logger` — level filtering, file output |
+| `FileOperationsTests.exe` | `FileOperations` — path utilities |
+| `RendererTests.exe` | `Renderer` — window creation, frame display |
+| `VideoPlayerTests.exe` | `VideoPlayer` + `ExportVideo` — full playback and export pipeline |
 
 ---
 
@@ -91,6 +105,7 @@ This runs all GoogleTests via CTest and prints output only for failing tests. Go
 | `F` | Toggle fullscreen |
 | `Ctrl+O` | Open file picker |
 | `File` menu | Open file picker or reopen a recent file |
+| `File` → `Export` | Open the export settings dialog |
 | Move mouse | Show control bar (auto-hides after 3 seconds) |
 | `Escape` | Quit |
 
@@ -98,20 +113,64 @@ This runs all GoogleTests via CTest and prints output only for failing tests. Go
 
 ## Architecture
 
-The player is split across these source files:
+The project has two pipelines: **playback** (real-time decode → render) and **export** (transcode to a new file). Both share the demux and decode stages.
 
-| File | Responsibility |
-|---|---|
-| `main.cpp` | Entry point, argument parsing |
-| `VideoPlayer.cpp` | Orchestrates playback loop across two threads |
-| `Decoder.cpp` | FFmpeg decoding and audio resampling |
-| `Renderer.cpp` | SDL3 window, YUV rendering, audio output |
-| `PlayerUI.cpp` | Control bar UI, hit-testing, auto-hide logic |
-| `MenuUI.cpp` | Top menu bar with File dropdown and Recent Files submenu |
-| `RecentFiles.cpp` | Tracks the last 10 opened files, persisted to `recent_files.json` |
-| `FileOperations.cpp` | Native OS file picker dialog and executable directory resolution |
+### Playback pipeline
 
-Playback is synchronized to the audio clock with latency compensation. The main thread pumps OS window events while a dedicated render thread owns SDL and handles all drawing.
+```
+Demuxer ──packets──► Decoder ──frames──► VideoPlayer ──► Renderer (SDL3)
+```
+
+### Export pipeline
+
+```
+Demuxer ──packets──► Decoder ──video frames──► VideoEncoder ──packets──► Muxer ──► file
+                             └──audio frames──► AudioEncoder ──packets──┘
+```
+
+Packets and frames flow through `LockingQueue<T>` instances owned by each stage. Each stage runs on its own thread and signals completion by closing its output queue.
+
+### Class reference
+
+#### Infrastructure
+
+| Class | File | Responsibility |
+|---|---|---|
+| `LockingQueue<T>` | `LockingQueue.h` | Thread-safe blocking queue. `push()` is non-blocking; `pop()` blocks until an item is available or the queue is closed. `close()` unblocks all waiting consumers. |
+| `Logger` | `Logger.cpp` | Singleton. Writes timestamped log lines to a file at configurable minimum level (Trace / Debug / Info / Warning / Error). Call `init()` once at startup. |
+| `Constants` | `Constants.h` | Compile-time constants shared across the pipeline (sample rates, codec names, bitrate defaults, timebase denominators). |
+
+#### Playback
+
+| Class | File | Responsibility |
+|---|---|---|
+| `Demuxer` | `Demuxer.cpp` | Opens a media file with `avformat`, selects the first video and audio streams, and reads raw `AVPacket*`s. Exposes `videoStreamIndex()`, `audioStreamIndex()`, `hasAudio()`, codec parameters, and time bases for downstream use. |
+| `Decoder` | `Decoder.cpp` | Opens video (H.264 etc.) and audio codecs from `AVCodecParameters`. Provides a synchronous `decode()` path and an async `startAsync()` path that drains a packet queue into separate `videoOutputQueue()` and `audioOutputQueue()` queues. Handles pixel format conversion (libswscale) and audio resampling to S16 stereo 44.1 kHz (libswresample). |
+| `VideoPlayer` | `VideoPlayer.cpp` | Orchestrates the playback loop across two threads (decode thread and render thread). Maintains an audio clock for A/V sync with latency compensation. |
+| `Renderer` | `Renderer.cpp` | Owns the SDL3 window, YUV texture, and audio device. Renders decoded frames, draws the UI overlay, and outputs audio samples. |
+
+#### Export
+
+| Class | File | Responsibility |
+|---|---|---|
+| `VideoEncoder` | `VideoEncoder.cpp` | Encodes `AVFrame*` (YUV420P) to H.264 or MPEG-4 packets. Opens the codec with `open()`, rescales PTS from the source time base, and pushes encoded `AVPacket*`s to its own `outputQueue()`. Supports a synchronous `writeFrame()` path and an async `startAsync()` path. |
+| `AudioEncoder` | `AudioEncoder.cpp` | Encodes `AVFrame*` (S16 stereo) to AAC packets. Internally resamples to FLTP via libswresample and buffers samples in a FIFO to match the codec's required frame size. Supports both synchronous and async paths. |
+| `Muxer` | `Muxer.cpp` | Writes encoded packets into an output container (MP4, TS, etc.) using `av_interleaved_write_frame`. Streams are registered with `addStream()` before `beginFile()`. `startAsync()` starts a background write thread (or two write threads when both video and audio are present). |
+| `ExportVideo` | `ExportVideo.cpp` | Coordinates the full export pipeline on a background thread: opens `Demuxer` + `Decoder` + `VideoEncoder` + `AudioEncoder` + `Muxer`, seeks to `exportStartTime`, drives the packet loop, and reports `progress()` (0–1). Respects `exportDuration` to clip the output. |
+| `EncoderSettings` | `EncoderSettings.h` | Plain struct holding export parameters: `videoCodec` (H264 / MPEG4), `outputFormat` (MP4 / TS), `videoBitRateKbps`, `audioBitRateKbps`, `exportStartTime`, `exportDuration`, and `outputFolder`. |
+
+#### UI
+
+| Class | File | Responsibility |
+|---|---|---|
+| `MainWindow` | `MainWindow.cpp` | Top-level application object. Owns `VideoPlayer`, `ExportVideo`, and `EncoderSettings`. Drives the SDL event loop and coordinates opening files, showing the export dialog, and displaying export progress. |
+| `PlayerUI` | `PlayerUI.cpp` | Control bar: play/pause button, seek bar, volume slider, speed indicator. Handles hit-testing and auto-hide after 3 seconds of mouse inactivity. |
+| `MenuUI` | `MenuUI.cpp` | Top menu bar with a File dropdown containing Open, Recent Files submenu, and Export. |
+| `DialogWindow` | `DialogWindow.cpp` | Base class for modal SDL3 dialogs. Handles the event loop, keyboard dismissal, and background dim overlay. |
+| `EncoderSettingsPanel` | `EncoderSettingsPanel.cpp` | SDL3 panel that lets the user configure codec, bitrate, time range, and output folder before starting an export. |
+| `ExportSettingsDialog` | `ExportSettingsDialog.cpp` | Modal dialog that wraps `EncoderSettingsPanel` and returns the confirmed `EncoderSettings` to the caller. |
+| `RecentFiles` | `RecentFiles.cpp` | Tracks the last 10 opened files, persisted to `recent_files.json` next to the executable. |
+| `FileOperations` | `FileOperations.cpp` | Native Windows file picker dialog (`IFileOpenDialog`) and executable directory resolution. |
 
 ---
 
@@ -121,6 +180,6 @@ All libraries are bundled in `libraries/Windows/` and tracked via Git LFS.
 
 | Library | Version | Purpose |
 |---|---|---|
-| FFmpeg | 7.x (avcodec 61) | Video/audio decoding |
+| FFmpeg | 7.x (avcodec 61) | Video/audio decoding and encoding (avcodec, avformat, avutil, swscale, swresample) |
 | SDL3 | 3.x | Window, rendering, audio output |
 | [memononen/nanosvg](https://github.com/memononen/nanosvg) | header-only | SVG rasterization for UI icons |
