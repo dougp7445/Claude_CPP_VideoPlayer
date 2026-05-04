@@ -120,7 +120,7 @@ void ExportVideo::run(const std::string& inputPath,
     AVRational vtb = demuxer.videoTimeBase();
     int64_t videoPtsOffset = static_cast<int64_t>(exportStart * vtb.den / vtb.num);
 
-    decoder.startAsync(demuxer, demuxer.outputQueue(),
+    decoder.startAsync(demuxer.videoStreamIndex(), demuxer.outputQueue(),
         [&](DecodedFrame& frame) -> bool {
             if (clipLength > 0.0) {
                 float p = static_cast<float>((frame.pts - exportStart) / clipLength);

@@ -68,16 +68,16 @@ bool Decoder::initAudioCodec(AVCodecParameters* par) {
     return swr_init(m_swrCtx) >= 0;
 }
 
-bool Decoder::startAsync(Demuxer& demuxer,
+bool Decoder::startAsync(int videoStreamIndex,
                          LockingQueue<AVPacket*>& packetQueue,
                          std::function<bool(DecodedFrame&)> filter) {
-    m_decodeThread = std::thread([this, &demuxer, &packetQueue,
+    m_decodeThread = std::thread([this, videoStreamIndex, &packetQueue,
                                   filter = std::move(filter)] {
         bool active = true;
         AVPacket* pkt = nullptr;
         while (packetQueue.pop(pkt)) {
             if (active) {
-                bool isVideo = demuxer.isVideoPacket(pkt);
+                bool isVideo = (pkt->stream_index == videoStreamIndex);
                 DecodedFrame frame;
                 if (decode(pkt, isVideo, frame)) {
                     active = filter(frame);

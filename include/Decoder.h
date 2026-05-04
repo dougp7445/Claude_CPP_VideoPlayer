@@ -11,7 +11,6 @@ extern "C" {
 
 #include <functional>
 #include <thread>
-#include "Demuxer.h"
 #include "LockingQueue.h"
 
 struct DecodedFrame {
@@ -43,7 +42,7 @@ public:
     // and passes the result to filter. filter receives the DecodedFrame and
     // returns true to continue or false to stop early. When done (queue drained
     // or filter returns false), the thread closes its owned outputQueue.
-    bool startAsync(Demuxer& demuxer,
+    bool startAsync(int videoStreamIndex,
                     LockingQueue<AVPacket*>& packetQueue,
                     std::function<bool(DecodedFrame&)> filter);
 
