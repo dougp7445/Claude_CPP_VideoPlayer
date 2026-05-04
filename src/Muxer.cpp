@@ -51,7 +51,7 @@ bool Muxer::beginFile() {
 
 bool Muxer::startAsync(LockingQueue<AVPacket*>& queue) {
     Logger::instance().debug("Muxer: starting write thread");
-    m_queue = &queue;
+    m_videoPacketQueue = &queue;
     m_writeThread = std::thread([this, &queue] {
         AVPacket* pkt = nullptr;
         while (queue.pop(pkt)) {
@@ -65,8 +65,8 @@ bool Muxer::startAsync(LockingQueue<AVPacket*>& queue) {
 
 bool Muxer::startAsync(LockingQueue<AVPacket*>& videoQueue, LockingQueue<AVPacket*>& audioQueue) {
     Logger::instance().debug("Muxer: starting video and audio write threads");
-    m_queue  = &videoQueue;
-    m_queue2 = &audioQueue;
+    m_videoPacketQueue  = &videoQueue;
+    m_audioPacketQueue = &audioQueue;
     auto drain = [this](LockingQueue<AVPacket*>& q) {
         AVPacket* pkt = nullptr;
         while (q.pop(pkt)) {
@@ -111,8 +111,8 @@ bool Muxer::endFile() {
 }
 
 void Muxer::close() {
-    if (m_queue)  { m_queue->close(); }
-    if (m_queue2) { m_queue2->close(); }
+    if (m_videoPacketQueue)  { m_videoPacketQueue->close(); }
+    if (m_audioPacketQueue) { m_audioPacketQueue->close(); }
     if (m_writeThread.joinable())  { m_writeThread.join(); }
     if (m_writeThread2.joinable()) { m_writeThread2.join(); }
     if (m_fmtCtx) {
@@ -123,5 +123,5 @@ void Muxer::close() {
         avformat_free_context(m_fmtCtx);
         m_fmtCtx = nullptr;
     }
-    m_queue = nullptr;
+    m_videoPacketQueue = nullptr;
 }

@@ -56,8 +56,8 @@ private:
     std::thread              m_writeThread;
     std::thread              m_writeThread2;
     std::mutex               m_writeMutex;
-    LockingQueue<AVPacket*>* m_queue  = nullptr;
-    LockingQueue<AVPacket*>* m_queue2 = nullptr;
+    LockingQueue<AVPacket*>* m_videoPacketQueue  = nullptr;
+    LockingQueue<AVPacket*>* m_audioPacketQueue = nullptr;
 };
 
 #endif // MUXER_H
