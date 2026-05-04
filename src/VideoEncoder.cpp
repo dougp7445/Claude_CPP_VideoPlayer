@@ -81,6 +81,7 @@ bool VideoEncoder::writeFrame(AVFrame* frame) {
 }
 
 bool VideoEncoder::startAsync(LockingQueue<AVFrame*>& frameQueue) {
+    Logger::instance().debug("VideoEncoder: starting async encode thread");
     m_encodeThread = std::thread([this, &frameQueue] {
         AVFrame* frame = nullptr;
         while (frameQueue.pop(frame)) {
@@ -89,12 +90,14 @@ bool VideoEncoder::startAsync(LockingQueue<AVFrame*>& frameQueue) {
         }
         encodeAndWrite(nullptr);
         m_outputQueue.close();
+        Logger::instance().debug("VideoEncoder: encode thread finished");
     });
     return true;
 }
 
 bool VideoEncoder::close() {
     if (!m_open) { return false; }
+    Logger::instance().debug("VideoEncoder: closing, flushing codec");
     if (m_encodeThread.joinable()) {
         m_encodeThread.join();
     } else {
@@ -108,9 +111,15 @@ bool VideoEncoder::close() {
 
 bool VideoEncoder::encodeAndWrite(AVFrame* frame) {
     if (avcodec_send_frame(m_ctx, frame) < 0) {
+        if (frame != nullptr) {
+            Logger::instance().error("VideoEncoder: failed to send frame to codec");
+        }
         return frame == nullptr;
     }
     while (avcodec_receive_packet(m_ctx, m_packet) >= 0) {
+        Logger::instance().trace(
+            "VideoEncoder: packet pts=" + std::to_string(m_packet->pts) +
+            " size=" + std::to_string(m_packet->size));
         av_packet_rescale_ts(m_packet, m_ctx->time_base, m_streamTimeBase);
         m_packet->stream_index = m_streamIndex;
         AVPacket* copy = av_packet_alloc();

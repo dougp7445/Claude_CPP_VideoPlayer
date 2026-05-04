@@ -128,6 +128,9 @@ bool AudioEncoder::drainFifo(bool flush) {
 
     while (av_audio_fifo_size(m_fifo) >= (flush ? 1 : frameSize)) {
         int toRead = std::min(av_audio_fifo_size(m_fifo), frameSize);
+        Logger::instance().trace(
+            "AudioEncoder: draining FIFO toRead=" + std::to_string(toRead) +
+            " remaining=" + std::to_string(av_audio_fifo_size(m_fifo)));
         av_frame_make_writable(m_encFrame);
         for (int ch = 0; ch < m_encFrame->ch_layout.nb_channels; ++ch) {
             memset(m_encFrame->data[ch], 0, frameSize * sizeof(float));
@@ -143,6 +146,7 @@ bool AudioEncoder::drainFifo(bool flush) {
 }
 
 bool AudioEncoder::startAsync(LockingQueue<AVFrame*>& frameQueue) {
+    Logger::instance().debug("AudioEncoder: starting async encode thread");
     m_encodeThread = std::thread([this, &frameQueue] {
         AVFrame* frame = nullptr;
         while (frameQueue.pop(frame)) {
@@ -152,12 +156,14 @@ bool AudioEncoder::startAsync(LockingQueue<AVFrame*>& frameQueue) {
         drainFifo(true);
         encodeAndWrite(nullptr);
         m_outputQueue.close();
+        Logger::instance().debug("AudioEncoder: encode thread finished");
     });
     return true;
 }
 
 bool AudioEncoder::close() {
     if (!m_open) { return false; }
+    Logger::instance().debug("AudioEncoder: closing, flushing codec");
     if (m_encodeThread.joinable()) {
         m_encodeThread.join();
     } else {
@@ -172,9 +178,15 @@ bool AudioEncoder::close() {
 
 bool AudioEncoder::encodeAndWrite(AVFrame* frame) {
     if (avcodec_send_frame(m_ctx, frame) < 0) {
+        if (frame != nullptr) {
+            Logger::instance().error("AudioEncoder: failed to send frame to codec");
+        }
         return frame == nullptr;
     }
     while (avcodec_receive_packet(m_ctx, m_packet) >= 0) {
+        Logger::instance().trace(
+            "AudioEncoder: packet pts=" + std::to_string(m_packet->pts) +
+            " size=" + std::to_string(m_packet->size));
         av_packet_rescale_ts(m_packet, m_ctx->time_base, m_streamTimeBase);
         m_packet->stream_index = m_streamIndex;
         AVPacket* copy = av_packet_alloc();

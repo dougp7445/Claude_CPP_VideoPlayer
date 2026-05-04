@@ -27,7 +27,7 @@ bool Decoder::initVideoCodec(AVCodecParameters* par) {
     const AVCodec* codec = avcodec_find_decoder(par->codec_id);
 
     if (!codec) {
-        Logger::instance().error("Unsupported video codec");
+        Logger::instance().error("Decoder: unsupported video codec");
         return false;
     }
 
@@ -35,10 +35,14 @@ bool Decoder::initVideoCodec(AVCodecParameters* par) {
     avcodec_parameters_to_context(m_codecCtxVideo, par);
 
     if (avcodec_open2(m_codecCtxVideo, codec, nullptr) < 0) {
-        Logger::instance().error("Failed to open video codec");
+        Logger::instance().error("Decoder: failed to open video codec");
         return false;
     }
 
+    Logger::instance().info(
+        "Decoder: video codec=" + std::string(codec->name) +
+        " " + std::to_string(m_codecCtxVideo->width) +
+        "x" + std::to_string(m_codecCtxVideo->height));
     return true;
 }
 
@@ -56,6 +60,11 @@ bool Decoder::initAudioCodec(AVCodecParameters* par) {
         return false;
     }
 
+    Logger::instance().info(
+        "Decoder: audio codec=" + std::string(codec->name) +
+        " " + std::to_string(m_codecCtxAudio->sample_rate) + "Hz" +
+        " " + std::to_string(m_codecCtxAudio->ch_layout.nb_channels) + "ch");
+
     AVChannelLayout stereo = AV_CHANNEL_LAYOUT_STEREO;
     swr_alloc_set_opts2(&m_swrCtx,
         &stereo,                        // out layout
@@ -71,6 +80,7 @@ bool Decoder::initAudioCodec(AVCodecParameters* par) {
 bool Decoder::startAsync(int videoStreamIndex,
                          LockingQueue<AVPacket*>& packetQueue,
                          std::function<bool(DecodedFrame&)> filter) {
+    Logger::instance().debug("Decoder: starting async decode thread");
     m_decodeThread = std::thread([this, videoStreamIndex, &packetQueue,
                                   filter = std::move(filter)] {
         bool active = true;
@@ -98,15 +108,20 @@ bool Decoder::startAsync(int videoStreamIndex,
             m_videoOutputQueue.close();
             m_audioOutputQueue.close();
         }
+        Logger::instance().debug("Decoder: decode thread finished");
     });
     return true;
 }
 
 void Decoder::waitDone() {
-    if (m_decodeThread.joinable()) { m_decodeThread.join(); }
+    if (m_decodeThread.joinable()) {
+        Logger::instance().debug("Decoder: waiting for decode thread");
+        m_decodeThread.join();
+    }
 }
 
 void Decoder::close() {
+    Logger::instance().debug("Decoder: closing");
     waitDone();
 
     if (m_swrCtx) {
@@ -128,6 +143,7 @@ void Decoder::close() {
 }
 
 void Decoder::flushBuffers() {
+    Logger::instance().debug("Decoder: flushing codec buffers");
     if (m_codecCtxVideo) {
         avcodec_flush_buffers(m_codecCtxVideo);
     }
@@ -151,6 +167,8 @@ bool Decoder::decode(const AVPacket* packet, bool isVideo, DecodedFrame& out) {
     }
 
     if (avcodec_send_packet(ctx, packet) < 0) {
+        Logger::instance().debug(
+            "Decoder: failed to send " + std::string(isVideo ? "video" : "audio") + " packet");
         return false;
     }
 
@@ -206,6 +224,9 @@ bool Decoder::decode(const AVPacket* packet, bool isVideo, DecodedFrame& out) {
         out.audioFrame = resampled;
     }
 
+    Logger::instance().trace(
+        "Decoder: decoded " + std::string(isVideo ? "video" : "audio") +
+        " frame pts=" + std::to_string(out.pts));
     av_frame_unref(m_frame);
     return true;
 }
