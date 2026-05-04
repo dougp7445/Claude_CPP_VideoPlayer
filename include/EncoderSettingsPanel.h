@@ -57,11 +57,15 @@ private:
     SDL_FRect   m_exportRect        = {};
 
     SDL_Texture* m_browseIconTex    = nullptr;
+    SDL_Texture* m_previewTex       = nullptr;
+    std::string  m_previewPath;
 
     std::string m_sourceFilePath;
     bool        m_sourceFocused     = false;
     std::string m_filePath;
     bool        m_fileFocused       = false;
+
+    void loadPreviewFrame(SDL_Renderer* renderer);
 };
 
 #endif // ENCODER_SETTINGS_PANEL_H

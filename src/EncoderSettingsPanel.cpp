@@ -7,6 +7,13 @@
 #include "nanosvg.h"
 #include "nanosvgrast.h"
 
+extern "C" {
+#include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
+#include <libavutil/frame.h>
+#include <libswscale/swscale.h>
+}
+
 static SDL_Texture* loadFolderIconTex(SDL_Renderer* renderer) {
     const char* base = SDL_GetBasePath();
     std::string path = (base ? std::string(base) : "") + "icons/folder.svg";
@@ -40,14 +47,16 @@ static SDL_Texture* loadFolderIconTex(SDL_Renderer* renderer) {
 }
 
 namespace {
-    constexpr float PANEL_W    = 400.0f;
+    constexpr float SETTINGS_W = 400.0f;
+    constexpr float PREVIEW_W  = 280.0f;
+    constexpr float PANEL_W    = SETTINGS_W + PREVIEW_W;
     constexpr float PANEL_H    = 334.0f;
     constexpr float TITLE_H    = 30.0f;
     constexpr float ROW_H      = 36.0f;
     constexpr float ARROW_W    = 20.0f;
     constexpr float ARROW_H    = 22.0f;
     constexpr float ARROW_L_X  = 155.0f;
-    constexpr float ARROW_R_X  = PANEL_W - 15.0f - ARROW_W;
+    constexpr float ARROW_R_X  = SETTINGS_W - 15.0f - ARROW_W;
     constexpr float VAL_MID_X  = (ARROW_L_X + ARROW_W + ARROW_R_X) * 0.5f;
     constexpr float LABEL_X    =  10.0f;
     constexpr float BTN_W      = 100.0f;
@@ -114,6 +123,10 @@ static void renderRow(SDL_Renderer* renderer,
 }
 
 void EncoderSettingsPanel::render(SDL_Renderer* renderer, float W, float H) {
+    if (m_previewPath != m_sourceFilePath) {
+        loadPreviewFrame(renderer);
+    }
+
     float px = (W - PANEL_W) * 0.5f;
     float py = (H - PANEL_H) * 0.5f;
 
@@ -131,14 +144,24 @@ void EncoderSettingsPanel::render(SDL_Renderer* renderer, float W, float H) {
 
     const char* title = "Export Settings";
     size_t titleLen = strlen(title);
-    float titleX = px + (PANEL_W - static_cast<float>(titleLen) * 8.0f) * 0.5f;
+    float titleX = px + (SETTINGS_W - static_cast<float>(titleLen) * 8.0f) * 0.5f;
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_RenderDebugText(renderer, titleX, py + (TITLE_H - 8.0f) * 0.5f, title);
+
+    const char* previewLabel = "Preview";
+    size_t previewLabelLen = strlen(previewLabel);
+    SDL_RenderDebugText(renderer,
+        px + SETTINGS_W + (PREVIEW_W - static_cast<float>(previewLabelLen) * 8.0f) * 0.5f,
+        py + (TITLE_H - 8.0f) * 0.5f,
+        previewLabel);
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(renderer, 90, 90, 90, 200);
     SDL_FRect sep = {px, py + TITLE_H - 1.0f, PANEL_W, 1.0f};
     SDL_RenderFillRect(renderer, &sep);
+    // Vertical separator between settings and preview columns
+    SDL_FRect vsep = {px + SETTINGS_W, py + TITLE_H, 1.0f, PANEL_H - TITLE_H};
+    SDL_RenderFillRect(renderer, &vsep);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
 
     renderRow(renderer, px, py + TITLE_H + 0.0f * ROW_H,
@@ -219,7 +242,7 @@ void EncoderSettingsPanel::render(SDL_Renderer* renderer, float W, float H) {
 
     constexpr float FIELD_X      = 70.0f;
     constexpr float BROWSE_BTN_W = 26.0f;
-    constexpr float FIELD_W      = PANEL_W - FIELD_X - BROWSE_BTN_W - 14.0f;
+    constexpr float FIELD_W      = SETTINGS_W - FIELD_X - BROWSE_BTN_W - 14.0f;
     constexpr float TEXT_PAD     = 4.0f;
     constexpr float ICON_SIZE    = 16.0f;
     int maxChars = static_cast<int>((FIELD_W - TEXT_PAD * 2.0f) / 8.0f);
@@ -279,8 +302,8 @@ void EncoderSettingsPanel::render(SDL_Renderer* renderer, float W, float H) {
                   m_filePath, m_fileFocused);
 
     float btnY = py + BTN_ROW_Y;
-    m_cancelRect = {px + 20.0f,                   btnY, BTN_W, BTN_H};
-    m_exportRect = {px + PANEL_W - 20.0f - BTN_W, btnY, BTN_W, BTN_H};
+    m_cancelRect = {px + 20.0f,                       btnY, BTN_W, BTN_H};
+    m_exportRect = {px + SETTINGS_W - 20.0f - BTN_W, btnY, BTN_W, BTN_H};
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     auto btnColor = [&](const SDL_FRect& r, uint8_t rr, uint8_t gg, uint8_t bb) {
@@ -301,6 +324,48 @@ void EncoderSettingsPanel::render(SDL_Renderer* renderer, float W, float H) {
     SDL_RenderDebugText(renderer,
         m_exportRect.x + (BTN_W - 6.0f * 8.0f) * 0.5f,
         btnY + (BTN_H - 8.0f) * 0.5f, "Export");
+
+    // Preview column
+    {
+        constexpr float PAD = 10.0f;
+        SDL_FRect previewArea = {
+            px + SETTINGS_W + 1.0f + PAD,
+            py + TITLE_H + PAD,
+            PREVIEW_W - PAD * 2.0f - 1.0f,
+            PANEL_H - TITLE_H - PAD * 2.0f
+        };
+
+        SDL_SetRenderDrawColor(renderer, 15, 15, 15, 255);
+        SDL_RenderFillRect(renderer, &previewArea);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, 70, 70, 70, 200);
+        SDL_RenderRect(renderer, &previewArea);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+
+        if (m_previewTex) {
+            float texW = 0.0f, texH = 0.0f;
+            SDL_GetTextureSize(m_previewTex, &texW, &texH);
+            float scaleX = previewArea.w / texW;
+            float scaleY = previewArea.h / texH;
+            float scale  = std::min(scaleX, scaleY);
+            float drawW  = texW * scale;
+            float drawH  = texH * scale;
+            SDL_FRect dst = {
+                previewArea.x + (previewArea.w - drawW) * 0.5f,
+                previewArea.y + (previewArea.h - drawH) * 0.5f,
+                drawW, drawH
+            };
+            SDL_RenderTexture(renderer, m_previewTex, nullptr, &dst);
+        } else {
+            const char* msg = m_sourceFilePath.empty() ? "No file selected" : "No preview";
+            size_t msgLen = strlen(msg);
+            SDL_SetRenderDrawColor(renderer, 80, 80, 80, 255);
+            SDL_RenderDebugText(renderer,
+                previewArea.x + (previewArea.w - static_cast<float>(msgLen) * 8.0f) * 0.5f,
+                previewArea.y + (previewArea.h - 8.0f) * 0.5f,
+                msg);
+        }
+    }
 }
 
 EncoderSettingsPanel::Result EncoderSettingsPanel::handleMouseClick(float mx, float my) {
@@ -375,12 +440,102 @@ void EncoderSettingsPanel::handleMouseButtonUp(float /*mx*/, float /*my*/) {
 
 EncoderSettingsPanel::~EncoderSettingsPanel() {
     if (m_browseIconTex) { SDL_DestroyTexture(m_browseIconTex); }
+    if (m_previewTex)    { SDL_DestroyTexture(m_previewTex); }
 }
 
 void EncoderSettingsPanel::setVideoDuration(double d) {
     m_videoDuration = d;
     m_startValue    = 0.0f;
     m_endValue      = static_cast<float>(d);
+}
+
+void EncoderSettingsPanel::loadPreviewFrame(SDL_Renderer* renderer) {
+    if (m_previewTex) {
+        SDL_DestroyTexture(m_previewTex);
+        m_previewTex = nullptr;
+    }
+    m_previewPath = m_sourceFilePath;
+
+    if (m_sourceFilePath.empty()) { return; }
+
+    AVFormatContext* fmtCtx = nullptr;
+    if (avformat_open_input(&fmtCtx, m_sourceFilePath.c_str(), nullptr, nullptr) < 0) { return; }
+    if (avformat_find_stream_info(fmtCtx, nullptr) < 0) {
+        avformat_close_input(&fmtCtx);
+        return;
+    }
+
+    int videoStreamIdx = -1;
+    for (unsigned i = 0; i < fmtCtx->nb_streams; ++i) {
+        if (fmtCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+            videoStreamIdx = static_cast<int>(i);
+            break;
+        }
+    }
+    if (videoStreamIdx < 0) { avformat_close_input(&fmtCtx); return; }
+
+    AVCodecParameters* par = fmtCtx->streams[videoStreamIdx]->codecpar;
+    const AVCodec* codec = avcodec_find_decoder(par->codec_id);
+    if (!codec) { avformat_close_input(&fmtCtx); return; }
+
+    AVCodecContext* codecCtx = avcodec_alloc_context3(codec);
+    avcodec_parameters_to_context(codecCtx, par);
+    if (avcodec_open2(codecCtx, codec, nullptr) < 0) {
+        avcodec_free_context(&codecCtx);
+        avformat_close_input(&fmtCtx);
+        return;
+    }
+
+    AVPacket* pkt   = av_packet_alloc();
+    AVFrame*  frame = av_frame_alloc();
+    bool gotFrame = false;
+
+    while (!gotFrame && av_read_frame(fmtCtx, pkt) >= 0) {
+        if (pkt->stream_index == videoStreamIdx) {
+            if (avcodec_send_packet(codecCtx, pkt) == 0) {
+                if (avcodec_receive_frame(codecCtx, frame) == 0) {
+                    gotFrame = true;
+                }
+            }
+        }
+        av_packet_unref(pkt);
+    }
+
+    if (gotFrame) {
+        int srcW = frame->width;
+        int srcH = frame->height;
+        constexpr int MAX_DIM = 256;
+        float scaleX = static_cast<float>(MAX_DIM) / static_cast<float>(srcW);
+        float scaleY = static_cast<float>(MAX_DIM) / static_cast<float>(srcH);
+        float scale  = std::min(scaleX, scaleY);
+        int dstW = static_cast<int>(static_cast<float>(srcW) * scale);
+        int dstH = static_cast<int>(static_cast<float>(srcH) * scale);
+
+        SwsContext* swsCtx = sws_getContext(
+            srcW, srcH, static_cast<AVPixelFormat>(frame->format),
+            dstW, dstH, AV_PIX_FMT_RGBA,
+            SWS_BILINEAR, nullptr, nullptr, nullptr);
+
+        if (swsCtx) {
+            std::vector<uint8_t> pixels(static_cast<size_t>(dstW * dstH * 4));
+            uint8_t* dstData[1]  = { pixels.data() };
+            int      dstStride[1] = { dstW * 4 };
+            sws_scale(swsCtx, frame->data, frame->linesize, 0, srcH, dstData, dstStride);
+            sws_freeContext(swsCtx);
+
+            SDL_Surface* surf = SDL_CreateSurfaceFrom(
+                dstW, dstH, SDL_PIXELFORMAT_RGBA32, pixels.data(), dstW * 4);
+            if (surf) {
+                m_previewTex = SDL_CreateTextureFromSurface(renderer, surf);
+                SDL_DestroySurface(surf);
+            }
+        }
+    }
+
+    av_frame_free(&frame);
+    av_packet_free(&pkt);
+    avcodec_free_context(&codecCtx);
+    avformat_close_input(&fmtCtx);
 }
 
 void EncoderSettingsPanel::setSourceFilePath(const std::string& filePath) {
