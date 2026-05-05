@@ -5,9 +5,11 @@
 #include <algorithm>
 #include <string>
 
-VideoPlayer::VideoPlayer()
+VideoPlayer::VideoPlayer(const VideoPlayerConfig& config)
     : m_settings(executableDir() + SETTINGS_FILENAME)
-{}
+{
+    m_renderer.setConfig(config);
+}
 VideoPlayer::~VideoPlayer() = default;
 
 bool VideoPlayer::load(const std::string& filePath) {

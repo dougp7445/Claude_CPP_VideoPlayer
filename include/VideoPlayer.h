@@ -5,12 +5,13 @@
 #include "Demuxer.h"
 #include "Renderer.h"
 #include "AppSettings.h"
+#include "VideoPlayerConfig.h"
 #include <atomic>
 #include <string>
 
 class VideoPlayer {
 public:
-    VideoPlayer();
+    explicit VideoPlayer(const VideoPlayerConfig& config = makeMainWindowConfig());
     ~VideoPlayer();
 
     bool load(const std::string& filePath);

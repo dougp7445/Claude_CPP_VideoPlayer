@@ -7,6 +7,11 @@
 
 Renderer::Renderer() = default;
 
+void Renderer::setConfig(const VideoPlayerConfig& cfg) {
+    m_config = cfg;
+    m_ui.setConfig(cfg);
+}
+
 Renderer::~Renderer() {
     shutdown();
 }
@@ -65,7 +70,7 @@ bool Renderer::initRenderer() {
         }
     }
 
-    if (!m_audioStream) {
+    if (!m_audioStream && m_config.enableAudio) {
         SDL_AudioSpec spec{};
         spec.format   = SDL_AUDIO_S16;
         spec.channels = CHANNELS_STEREO;
@@ -320,25 +325,32 @@ PlayerEvent Renderer::pollEvents() {
                     playerEvent = PlayerEvent::SeekBackward;
                     break;
                 case SDLK_UP:
-                    m_ui.adjustVolume( VOLUME_KEY_DELTA);
-                    syncAudio();
+                    if (m_config.showVolumeControl) {
+                        m_ui.adjustVolume( VOLUME_KEY_DELTA);
+                        syncAudio();
+                    }
                     break;
                 case SDLK_DOWN:
-                    m_ui.adjustVolume(-VOLUME_KEY_DELTA);
-                    syncAudio();
+                    if (m_config.showVolumeControl) {
+                        m_ui.adjustVolume(-VOLUME_KEY_DELTA);
+                        syncAudio();
+                    }
                     break;
                 case SDLK_F:
-                    playerEvent = PlayerEvent::ToggleFullscreen;
+                    if (m_config.allowFullscreen)
+                        playerEvent = PlayerEvent::ToggleFullscreen;
                     break;
                 case SDLK_O:
-                    if (event.key.mod & SDL_KMOD_CTRL) {
+                    if (m_config.showMenu && (event.key.mod & SDL_KMOD_CTRL)) {
                         playerEvent = PlayerEvent::OpenFile;
                     }
                     break;
-                case SDLK_S:      
-                    m_ui.cycleSpeed(); 
-                    syncAudio(); 
-                    playerEvent = PlayerEvent::SpeedChange;
+                case SDLK_S:
+                    if (m_config.showSpeedControl) {
+                        m_ui.cycleSpeed();
+                        syncAudio();
+                        playerEvent = PlayerEvent::SpeedChange;
+                    }
                     break;
                 default: 
                     break;
@@ -360,8 +372,10 @@ PlayerEvent Renderer::pollEvents() {
 
         case SDL_EVENT_MOUSE_WHEEL:
             m_ui.onActivity();
-            m_ui.adjustVolume(event.wheel.y * VOLUME_WHEEL_DELTA);
-            syncAudio();
+            if (m_config.showVolumeControl) {
+                m_ui.adjustVolume(event.wheel.y * VOLUME_WHEEL_DELTA);
+                syncAudio();
+            }
             break;
 
         default: 

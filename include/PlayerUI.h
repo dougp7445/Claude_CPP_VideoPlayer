@@ -7,10 +7,14 @@
 #include <vector>
 #include "PlayerEvent.h"
 #include "MenuUI.h"
+#include "VideoPlayerConfig.h"
 
 class PlayerUI {
 public:
     ~PlayerUI();
+
+    // Apply a feature config; must be called before the first render().
+    void setConfig(const VideoPlayerConfig& cfg);
 
     // Draw the control bar overlay onto renderer.
     void render(SDL_Renderer* renderer, double currentPts, double duration, bool paused);
@@ -41,6 +45,8 @@ public:
     bool   isMuted()       const { return m_muted; }
 
 private:
+    VideoPlayerConfig m_config;
+
     // Playback speed
     int   m_speedIndex    = 1;     // index into SPEEDS[]
     float m_speed         = 1.0f;
