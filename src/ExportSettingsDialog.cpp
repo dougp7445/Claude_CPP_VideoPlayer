@@ -5,7 +5,7 @@
 ExportSettingsDialog::ExportSettingsDialog(double videoDuration,
                                            const std::string& defaultSourceFilePath,
                                            const std::string& defaultFilePath)
-    : DialogWindow("Export Settings", 400, 334) {
+    : DialogWindow("Export Settings", 680, 334) {
     m_panel.setVideoDuration(videoDuration);
     m_panel.setSourceFilePath(defaultSourceFilePath);
     m_panel.setOutputFilePath(defaultFilePath);

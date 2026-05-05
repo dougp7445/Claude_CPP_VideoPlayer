@@ -6,11 +6,15 @@
 #include <vector>
 #include "PlayerEvent.h"
 #include "PlayerUI.h"
+#include "VideoPlayerConfig.h"
 
 class Renderer {
 public:
     Renderer();
     ~Renderer();
+
+    // Apply feature flags; call before initWindow().
+    void setConfig(const VideoPlayerConfig& cfg);
 
     // Call initWindow() from the main thread before spawning the render thread.
     bool initWindow(const std::string& title, int width, int height);
@@ -72,7 +76,8 @@ private:
     double   m_audioLatencyS    = 0.0;
     bool     m_fullscreen       = false;
 
-    PlayerUI m_ui;
+    VideoPlayerConfig m_config;
+    PlayerUI          m_ui;
 
     void measureAudioLatency();
     // Sync SDL audio gain and speed ratio from current UI state.

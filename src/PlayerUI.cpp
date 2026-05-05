@@ -102,8 +102,14 @@ void PlayerUI::cycleSpeed() {
     m_speed      = SPEEDS[m_speedIndex];
 }
 
+void PlayerUI::setConfig(const VideoPlayerConfig& cfg) {
+    m_config = cfg;
+}
+
 void PlayerUI::handleMouseMotion(float mx, float my) {
-    m_menu.handleMouseMotion(mx, my);
+    if (m_config.showMenu) {
+        m_menu.handleMouseMotion(mx, my);
+    }
 }
 
 void PlayerUI::setRecentFiles(const std::vector<std::string>& files) {
@@ -129,9 +135,11 @@ void PlayerUI::render(SDL_Renderer* renderer,
         m_lastActivityMs = SDL_GetTicks();
     }
 
-    // Auto-hide after inactivity while playing
+    // Auto-hide after inactivity while playing (disabled when autoHideUI is off).
     uint64_t now = SDL_GetTicks();
-    if (!paused && now - m_lastActivityMs > UI_HIDE_MS) {
+    if (!m_config.autoHideUI) {
+        m_uiVisible = true;
+    } else if (!paused && now - m_lastActivityMs > UI_HIDE_MS) {
         if (m_uiVisible) {
             m_uiVisible = false;
             SDL_HideCursor();
@@ -166,107 +174,149 @@ void PlayerUI::render(SDL_Renderer* renderer,
     SDL_RenderFillRect(renderer, &barBg);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
 
-    const float btnCX = pad + btnW * 0.5f;
-    const float btnCY = barY + barH * 0.5f;
-    const float ic    = 9.0f * sc;
-    const float ih    = 12.0f * sc;
-
     // ── Play / Pause icon ──
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    if (paused) {
-        SDL_Vertex tri[3] = {
-            {{btnCX - ic,             btnCY - ih}, {255,255,255,255}, {0,0}},
-            {{btnCX + ic + 4.0f * sc, btnCY},      {255,255,255,255}, {0,0}},
-            {{btnCX - ic,             btnCY + ih}, {255,255,255,255}, {0,0}},
-        };
-        SDL_RenderGeometry(renderer, nullptr, tri, 3, nullptr, 0);
+    if (m_config.showPlayPause) {
+        const float btnCX = pad + btnW * 0.5f;
+        const float btnCY = barY + barH * 0.5f;
+        const float ic    = 9.0f * sc;
+        const float ih    = 12.0f * sc;
+
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        if (paused) {
+            SDL_Vertex tri[3] = {
+                {{btnCX - ic,             btnCY - ih}, {255,255,255,255}, {0,0}},
+                {{btnCX + ic + 4.0f * sc, btnCY},      {255,255,255,255}, {0,0}},
+                {{btnCX - ic,             btnCY + ih}, {255,255,255,255}, {0,0}},
+            };
+            SDL_RenderGeometry(renderer, nullptr, tri, 3, nullptr, 0);
+        } else {
+            float bw = 7.0f * sc;
+            SDL_FRect lb = {btnCX - ic,                   btnCY - ih, bw, ih * 2.0f};
+            SDL_FRect rb = {btnCX - ic + bw + 2.0f * sc,  btnCY - ih, bw, ih * 2.0f};
+            SDL_RenderFillRect(renderer, &lb);
+            SDL_RenderFillRect(renderer, &rb);
+        }
+        m_playPauseRect = {pad, barY, btnW, barH};
     } else {
-        float bw = 7.0f * sc;
-        SDL_FRect lb = {btnCX - ic,                   btnCY - ih, bw, ih * 2.0f};
-        SDL_FRect rb = {btnCX - ic + bw + 2.0f * sc,  btnCY - ih, bw, ih * 2.0f};
-        SDL_RenderFillRect(renderer, &lb);
-        SDL_RenderFillRect(renderer, &rb);
+        m_playPauseRect = {-1.0f, -1.0f, 0.0f, 0.0f};
     }
-    m_playPauseRect = {pad, barY, btnW, barH};
+
+    // ── Layout: compute progress bar bounds based on which elements are visible ──
+    //
+    // Left of progress bar: optional play/pause button.
+    // Right of progress bar: optional time | speed | mute+volume (in that order).
+    // The calculation mirrors the original formula, subtracting only present elements.
+    float progX = pad + (m_config.showPlayPause ? btnW + pad : 0.0f);
+
+    float rightConsumed = pad;  // right-edge margin
+    const bool hasRightElements = m_config.showTimeDisplay
+                                || m_config.showSpeedControl
+                                || m_config.showVolumeControl;
+    if (hasRightElements)             rightConsumed += pad;  // gap between bar and first right element
+    if (m_config.showTimeDisplay)     rightConsumed += timeW + pad; // timeW + cosmetic gap after time
+    if (m_config.showSpeedControl)    rightConsumed += speedBtnW;
+    if (m_config.showVolumeControl)   rightConsumed += muteBtnW + volBarW;
+
+    float progW = m_config.showSeekBar
+        ? std::max(0.0f, W - progX - rightConsumed)
+        : 0.0f;
+
+    // Right-side element X positions advance left-to-right from progress bar end.
+    float curRightX = progX + progW + pad;
+    const float timeX      = curRightX;
+    if (m_config.showTimeDisplay)  curRightX += timeW + pad;
+    const float speedX     = curRightX;
+    if (m_config.showSpeedControl) curRightX += speedBtnW;
+    const float volLabelX  = curRightX;
+    const float volBarX    = volLabelX + muteBtnW + 4.0f * sc;
+    const float volBarY    = barY + (barH - progH) * 0.5f;
 
     // ── Progress bar ──
-    float progX = pad + btnW + pad;
-    float progW = W - progX - pad - timeW - pad - speedBtnW - muteBtnW - volBarW - pad;
-    float progY = barY + (barH - progH) * 0.5f;
+    if (m_config.showSeekBar) {
+        const float progY = barY + (barH - progH) * 0.5f;
 
-    SDL_SetRenderDrawColor(renderer, 80, 80, 80, 255);
-    SDL_FRect progBg = {progX, progY, progW, progH};
-    SDL_RenderFillRect(renderer, &progBg);
+        SDL_SetRenderDrawColor(renderer, 80, 80, 80, 255);
+        SDL_FRect progBg = {progX, progY, progW, progH};
+        SDL_RenderFillRect(renderer, &progBg);
 
-    float fillW = (duration > 0.0)
-        ? static_cast<float>(currentPts / duration) * progW : 0.0f;
-    SDL_SetRenderDrawColor(renderer, 220, 220, 220, 255);
-    SDL_FRect progFill = {progX, progY, fillW, progH};
-    SDL_RenderFillRect(renderer, &progFill);
+        float fillW = (duration > 0.0)
+            ? static_cast<float>(currentPts / duration) * progW : 0.0f;
+        SDL_SetRenderDrawColor(renderer, 220, 220, 220, 255);
+        SDL_FRect progFill = {progX, progY, fillW, progH};
+        SDL_RenderFillRect(renderer, &progFill);
 
-    float handleW = 10.0f * sc;
-    float handleH = progH + 8.0f * sc;
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    SDL_FRect handle = {progX + fillW - handleW * 0.5f, progY - 4.0f * sc, handleW, handleH};
-    SDL_RenderFillRect(renderer, &handle);
+        float handleW = 10.0f * sc;
+        float handleH = progH + 8.0f * sc;
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_FRect handle = {progX + fillW - handleW * 0.5f, progY - 4.0f * sc, handleW, handleH};
+        SDL_RenderFillRect(renderer, &handle);
 
-    m_progressBarX = progX; m_progressBarW = progW;
-    m_progressBarY = barY;  m_progressBarH = barH;
-
-    // ── Time display ──
-    float timeX = progX + progW + pad;
-    float timeY = barY + (barH - 8.0f) * 0.5f;
-    std::string timeStr = formatTime(currentPts) + " / " + formatTime(duration);
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    SDL_RenderDebugText(renderer, timeX, timeY, timeStr.c_str());
-
-    // ── Speed button ──
-    float speedX = timeX + timeW;
-    m_speedRect = {speedX, barY, speedBtnW, barH};
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 30);
-    float speedBgH = 20.0f * sc;
-    SDL_FRect speedBg = {speedX + 2.0f * sc, barY + (barH - speedBgH) * 0.5f,
-                         speedBtnW - 4.0f * sc, speedBgH};
-    SDL_RenderFillRect(renderer, &speedBg);
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
-    const char* label = SPEED_LABELS[m_speedIndex];
-    float labelLen = static_cast<float>(SDL_strlen(label)) * 8.0f;
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    SDL_RenderDebugText(renderer,
-        speedX + (speedBtnW - labelLen) * 0.5f,
-        barY + (barH - 8.0f) * 0.5f, label);
-
-    // ── Mute / Speaker icon ──
-    float volLabelX = speedX + speedBtnW;
-    float volBarX   = volLabelX + muteBtnW + 4.0f * sc;
-    float volBarY   = barY + (barH - progH) * 0.5f;
-
-    m_muteRect = {volLabelX, barY, muteBtnW, barH};
-
-    SDL_Texture* iconTex = m_muted ? m_volMutedTex : m_volFullTex;
-    if (iconTex) {
-        float iconSize = muteBtnW * 0.8f;
-        SDL_FRect iconDst = {volLabelX + (muteBtnW - iconSize) * 0.5f,
-                             barY      + (barH     - iconSize) * 0.5f,
-                             iconSize, iconSize};
-        SDL_RenderTexture(renderer, iconTex, nullptr, &iconDst);
+        m_progressBarX = progX; m_progressBarW = progW;
+        m_progressBarY = barY;  m_progressBarH = barH;
+    } else {
+        m_progressBarX = -1; m_progressBarW = 0;
+        m_progressBarY = -1; m_progressBarH = 0;
     }
 
-    // ── Volume bar ──
-    SDL_SetRenderDrawColor(renderer, 80, 80, 80, 255);
-    SDL_FRect volBg = {volBarX, volBarY, volBarW, progH};
-    SDL_RenderFillRect(renderer, &volBg);
+    // ── Time display ──
+    if (m_config.showTimeDisplay) {
+        const float timeY = barY + (barH - 8.0f) * 0.5f;
+        std::string timeStr = formatTime(currentPts) + " / " + formatTime(duration);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderDebugText(renderer, timeX, timeY, timeStr.c_str());
+    }
 
-    float volFillW = SDL_clamp(m_volume / VOLUME_MAX, VOLUME_MIN, 1.0f) * volBarW;
-    SDL_SetRenderDrawColor(renderer, 220, 220, 220, 255);
-    SDL_FRect volFill = {volBarX, volBarY, volFillW, progH};
-    SDL_RenderFillRect(renderer, &volFill);
+    // ── Speed button ──
+    if (m_config.showSpeedControl) {
+        m_speedRect = {speedX, barY, speedBtnW, barH};
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 30);
+        float speedBgH = 20.0f * sc;
+        SDL_FRect speedBg = {speedX + 2.0f * sc, barY + (barH - speedBgH) * 0.5f,
+                             speedBtnW - 4.0f * sc, speedBgH};
+        SDL_RenderFillRect(renderer, &speedBg);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+        const char* label = SPEED_LABELS[m_speedIndex];
+        float labelLen = static_cast<float>(SDL_strlen(label)) * 8.0f;
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderDebugText(renderer,
+            speedX + (speedBtnW - labelLen) * 0.5f,
+            barY + (barH - 8.0f) * 0.5f, label);
+    } else {
+        m_speedRect = {-1.0f, -1.0f, 0.0f, 0.0f};
+    }
 
-    m_volumeBarX = volBarX; m_volumeBarW = volBarW;
-    m_volumeBarY = barY;    m_volumeBarH = barH;
+    // ── Mute / Speaker icon + Volume bar ──
+    if (m_config.showVolumeControl) {
+        m_muteRect = {volLabelX, barY, muteBtnW, barH};
 
-    m_menu.render(renderer, W);
+        SDL_Texture* iconTex = m_muted ? m_volMutedTex : m_volFullTex;
+        if (iconTex) {
+            float iconSize = muteBtnW * 0.8f;
+            SDL_FRect iconDst = {volLabelX + (muteBtnW - iconSize) * 0.5f,
+                                 barY      + (barH     - iconSize) * 0.5f,
+                                 iconSize, iconSize};
+            SDL_RenderTexture(renderer, iconTex, nullptr, &iconDst);
+        }
+
+        SDL_SetRenderDrawColor(renderer, 80, 80, 80, 255);
+        SDL_FRect volBg = {volBarX, volBarY, volBarW, progH};
+        SDL_RenderFillRect(renderer, &volBg);
+
+        float volFillW = SDL_clamp(m_volume / VOLUME_MAX, VOLUME_MIN, 1.0f) * volBarW;
+        SDL_SetRenderDrawColor(renderer, 220, 220, 220, 255);
+        SDL_FRect volFill = {volBarX, volBarY, volFillW, progH};
+        SDL_RenderFillRect(renderer, &volFill);
+
+        m_volumeBarX = volBarX; m_volumeBarW = volBarW;
+        m_volumeBarY = barY;    m_volumeBarH = barH;
+    } else {
+        m_muteRect   = {-1.0f, -1.0f, 0.0f, 0.0f};
+        m_volumeBarX = -1; m_volumeBarW = 0;
+        m_volumeBarY = -1; m_volumeBarH = 0;
+    }
+
+    if (m_config.showMenu) { m_menu.render(renderer, W); }
 }
 
 // ── Hit testing ──────────────────────────────────────────────────────────────
@@ -279,33 +329,34 @@ PlayerEvent PlayerUI::handleMouseClick(float mx, float my) {
         return x >= rx && x < rx + rw && y >= ry && y < ry + rh;
     };
 
-    // ── Menu bar / dropdown — highest priority ──
-    {
+    if (m_config.showMenu) {
         bool consumed = false;
         PlayerEvent menuEv = m_menu.handleMouseClick(mx, my, consumed);
         if (consumed) { return menuEv; }
     }
 
-    if (hit(mx, my, m_playPauseRect))
+    if (m_config.showPlayPause && hit(mx, my, m_playPauseRect))
         return PlayerEvent::TogglePause;
 
-    if (hitXYWH(mx, my, m_progressBarX, m_progressBarY, m_progressBarW, m_progressBarH)) {
+    if (m_config.showSeekBar &&
+        hitXYWH(mx, my, m_progressBarX, m_progressBarY, m_progressBarW, m_progressBarH)) {
         m_seekTarget = std::max(0.0, std::min(1.0,
             static_cast<double>((mx - m_progressBarX) / m_progressBarW)));
         return PlayerEvent::SeekTo;
     }
 
-    if (hit(mx, my, m_speedRect)) {
+    if (m_config.showSpeedControl && hit(mx, my, m_speedRect)) {
         cycleSpeed();
         return PlayerEvent::SpeedChange;
     }
 
-    if (hit(mx, my, m_muteRect)) {
+    if (m_config.showVolumeControl && hit(mx, my, m_muteRect)) {
         m_muted = !m_muted;
         return PlayerEvent::None;
     }
 
-    if (hitXYWH(mx, my, m_volumeBarX, m_volumeBarY, m_volumeBarW, m_volumeBarH)) {
+    if (m_config.showVolumeControl &&
+        hitXYWH(mx, my, m_volumeBarX, m_volumeBarY, m_volumeBarW, m_volumeBarH)) {
         m_volume = SDL_clamp((mx - m_volumeBarX) / m_volumeBarW * 2.0f, 0.0f, 2.0f);
         return PlayerEvent::None;
     }
